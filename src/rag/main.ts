@@ -8,6 +8,7 @@ import fs from 'fs/promises';
 import { saveRelevantChunksToExcel } from "../excel";
 import { expandCode } from "./code-generation/code_expand";
 import path from "path";
+import { processCodeGenerationForQuery } from "./code-generation/code";
 
 export async function ragPipeline(
     ballerinaDir: string,
@@ -112,6 +113,8 @@ export async function ragPipeline(
             const outputDir = path.join('rag_outputs', 'expand_code');
             await expandCode({ chunksFilePath: jsonPath, projectPath, outputDir, docId });
             console.log(`Code expansion completed for query ${docId}`);
+            await processCodeGenerationForQuery(docId, userQuery.query);
+            console.log(`Code generation completed for query ${docId}`);
 
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
