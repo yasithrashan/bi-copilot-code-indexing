@@ -6,7 +6,8 @@ import { createQdrantClient, createCollection, upsertChunks, searchRelevantChunk
 import { chunkUserQuery } from "./queries";
 import fs from 'fs/promises';
 import { saveRelevantChunksToExcel } from "../excel";
-
+import { expandCode } from "./code-generation/code_expand";
+import path from "path";
 
 export async function ragPipeline(
     ballerinaDir: string,
@@ -72,10 +73,13 @@ export async function ragPipeline(
             console.log(`\nUser Query: ${userQuery.query}`);
 
             // Json content
-            const dataToSaveJson = relevantChunks.map((chunk) => ({
-                score: chunk.score,
-                payload: chunk.payload
-            }));
+            const dataToSaveJson = {
+                query: userQuery.query,
+                relevant_chunks: relevantChunks.map((chunk) => ({
+                    score: chunk.score,
+                    payload: chunk.payload
+                }))
+            };
 
             // Excel content
             const dataToSaveExcel = relevantChunks.map((chunk) => chunk.payload.content);
@@ -103,6 +107,12 @@ export async function ragPipeline(
             allRelevantChunks.push(dataToSaveExcel);
 
             console.log(`Saved relevant chunks to ${jsonPath} and ${mdPath}`);
+
+            const projectPath = ballerinaDir;
+            const outputDir = path.join('rag_outputs', 'expand_code');
+            await expandCode({ chunksFilePath: jsonPath, projectPath, outputDir, docId });
+            console.log(`Code expansion completed for query ${docId}`);
+
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
             allRelevantChunks.push([]);
@@ -114,4 +124,6 @@ export async function ragPipeline(
 
     // Save in the excel file after collecting all relevant chunks
     await saveRelevantChunksToExcel(userQueries, allRelevantChunks);
+
+    console.log("RAG pipeline completed!");
 }

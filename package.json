@@ -10,7 +10,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.17",
     "@qdrant/js-client-rest": "^1.15.1",
+    "ai": "^5.0.47",
     "dotenv": "^17.2.2",
     "xlsx": "^0.18.5"
   },
