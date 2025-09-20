@@ -36,7 +36,6 @@ export async function ragPipeline(
 
     // Prepare texts for embeddings
     const textsForEmbedding = allChunks.map((chunk) => chunk.content);
-    // console.log(textsForEmbedding);
 
     // Generate embeddings
     console.log("Generating embeddings with VoyageAI...");
@@ -57,10 +56,10 @@ export async function ragPipeline(
 
     console.log(embededUserQuery.length);
 
-    const dirPath = 'rag_outputs/relevant_chunks'
-    await fs.mkdir(dirPath, { recursive: true })
+    const dirPath = 'rag_outputs/relevant_chunks';
+    await fs.mkdir(dirPath, { recursive: true });
 
-    //Return relevant chunks for every user query
+    // Return relevant chunks for every user query
     const allRelevantChunks: any[][] = [];
     for (let i = 0; i < userQueries.length; i++) {
         const docId = i + 1;
@@ -73,23 +72,37 @@ export async function ragPipeline(
             console.log(`\nUser Query: ${userQuery.query}`);
 
             // Json content
-            const dataToSaveJson = relevantChunks.map((chunk) => {
-                return {
-                    score: chunk.score,
-                    payload: chunk.payload
-                };
-            });
+            const dataToSaveJson = relevantChunks.map((chunk) => ({
+                score: chunk.score,
+                payload: chunk.payload
+            }));
 
             // Excel content
             const dataToSaveExcel = relevantChunks.map((chunk) => chunk.payload.content);
 
-            const filePath = `${dirPath}/${docId}.json`;
-            await fs.writeFile(filePath, JSON.stringify(dataToSaveJson, null, 2));
+            // Markdown content
+            let mdContent = `# User Query ${docId}\n\n`;
+            mdContent += `**Query:** ${userQuery.query}\n\n`;
+            mdContent += `## Relevant Chunks\n\n`;
+            relevantChunks.forEach((chunk, idx) => {
+                mdContent += `### Chunk ${idx + 1}\n`;
+                mdContent += "```ballerina\n";
+                mdContent += chunk.payload.content.trim() + "\n";
+                mdContent += "```\n\n";
+            });
+
+            // Save JSON
+            const jsonPath = `${dirPath}/${docId}.json`;
+            await fs.writeFile(jsonPath, JSON.stringify(dataToSaveJson, null, 2));
+
+            // Save Markdown
+            const mdPath = `${dirPath}/${docId}.md`;
+            await fs.writeFile(mdPath, mdContent);
 
             // Collect for Excel
             allRelevantChunks.push(dataToSaveExcel);
 
-            console.log(`Saved relevant chunks to ${filePath}`);
+            console.log(`Saved relevant chunks to ${jsonPath} and ${mdPath}`);
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
             allRelevantChunks.push([]);
@@ -101,5 +114,4 @@ export async function ragPipeline(
 
     // Save in the excel file after collecting all relevant chunks
     await saveRelevantChunksToExcel(userQueries, allRelevantChunks);
-
 }
