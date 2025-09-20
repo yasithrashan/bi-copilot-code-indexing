@@ -1,4 +1,4 @@
-import { dataExtarctFromExcelSheet } from "../excel-data-extraction";
+import { dataExtarctFromExcelSheet } from "../excel";
 
 export async function chunkUserQuery() {
   const queries = await dataExtarctFromExcelSheet();

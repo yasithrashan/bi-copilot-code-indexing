@@ -5,6 +5,7 @@ import { BallerinaChunker } from "./chunker";
 import { createQdrantClient, createCollection, upsertChunks, searchRelevantChunks } from "./qdrant";
 import { chunkUserQuery } from "./queries";
 import fs from 'fs/promises';
+import { saveRelevantChunksToExcel } from "../excel";
 
 
 export async function ragPipeline(
@@ -59,7 +60,8 @@ export async function ragPipeline(
     const dirPath = 'rag_outputs/relevant_chunks'
     await fs.mkdir(dirPath, { recursive: true })
 
-    // Return relevant chunks for every user query
+    //Return relevant chunks for every user query
+    const allRelevantChunks: any[][] = [];
     for (let i = 0; i < userQueries.length; i++) {
         const docId = i + 1;
         const queryEmbedding = embededUserQuery[i];
@@ -70,20 +72,34 @@ export async function ragPipeline(
 
             console.log(`\nUser Query: ${userQuery.query}`);
 
-            const dataToSave = relevantChunks.map((chunk) => {
+            // Json content
+            const dataToSaveJson = relevantChunks.map((chunk) => {
                 return {
                     score: chunk.score,
                     payload: chunk.payload
                 };
             });
 
+            // Excel content
+            const dataToSaveExcel = relevantChunks.map((chunk) => chunk.payload.content);
+
             const filePath = `${dirPath}/${docId}.json`;
-            await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2));
+            await fs.writeFile(filePath, JSON.stringify(dataToSaveJson, null, 2));
+
+            // Collect for Excel
+            allRelevantChunks.push(dataToSaveExcel);
+
             console.log(`Saved relevant chunks to ${filePath}`);
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
+            allRelevantChunks.push([]);
         } else {
             console.warn(`User query at index ${i} is undefined.`);
+            allRelevantChunks.push([]);
         }
     }
+
+    // Save in the excel file after collecting all relevant chunks
+    await saveRelevantChunksToExcel(userQueries, allRelevantChunks);
+
 }
