@@ -1,0 +1,82 @@
+=== QUERY ID 1 ===
+Update the pagination logic so it validates 'page' and 'limit' values, returning a 400 Bad Request if they are less than or equal to zero
+
+=== API DOC USED ===
+api_docs/1.json
+
+=== EXTRACTED CODE USED ===
+agentic_outputs/expand_code/1.md
+
+=== GENERATED CODE RESPONSE ===
+Now I can see the current pagination implementation. I need to update the GET `/books` endpoint to validate that both `page` and `limit` parameters are greater than zero, and return a 400 Bad Request if they're not valid.
+
+<code filename="main.bal">
+```ballerina
+// Get all books with pagination
+resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns PaginatedBooks|http:BadRequest|http:InternalServerError {
+    totalRequests += 1;
+
+    // Validate pagination parameters
+    if page <= 0 || 'limit <= 0 {
+        http:BadRequest badRequest = {
+            body: {
+                message: "Page and limit parameters must be greater than zero"
+            }
+        };
+        return badRequest;
+    }
+
+    Book[] allBooks = bookStore.toArray();
+    int totalCount = allBooks.length();
+    int startIndex = (page - 1) * 'limit;
+    int endIndex = startIndex + 'limit;
+
+    if startIndex >= totalCount {
+        PaginatedBooks emptyResult = {
+            books: [],
+            totalCount: totalCount,
+            currentPage: page,
+            totalPages: (totalCount + 'limit - 1) / 'limit
+        };
+        return emptyResult;
+    }
+
+    if endIndex > totalCount {
+        endIndex = totalCount;
+    }
+
+    Book[] paginatedBooks = [];
+    int index = startIndex;
+    while index < endIndex {
+        paginatedBooks.push(allBooks[index]);
+        index += 1;
+    }
+
+    PaginatedBooks result = {
+        books: paginatedBooks,
+        totalCount: totalCount,
+        currentPage: page,
+        totalPages: (totalCount + 'limit - 1) / 'limit
+    };
+
+    return result;
+}
+```
+</code>
+
+The key changes I made:
+
+1. **Updated the return type**: Added `http:BadRequest` to the return union type to allow returning 400 status codes.
+
+2. **Added validation logic**: Added a validation check at the beginning of the function to ensure both `page` and `limit` parameters are greater than zero.
+
+3. **Return appropriate error response**: When validation fails, the function now returns an `http:BadRequest` response with a descriptive error message.
+
+This update ensures that:
+- If `page` is 0 or negative, a 400 Bad Request is returned
+- If `limit` is 0 or negative, a 400 Bad Request is returned  
+- The error response includes a clear message explaining the validation requirement
+- Valid pagination requests continue to work as before
+
+The endpoint will now properly validate pagination parameters and provide meaningful feedback to clients when invalid values are provided.
+

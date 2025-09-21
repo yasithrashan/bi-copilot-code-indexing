@@ -1,0 +1,65 @@
+=== QUERY ID 5 ===
+Standardize the error responses so they always return a JSON object with an error message (e.g., { \"error\": \"Book not found\" }) instead of just plain HTTP status codes.
+
+=== API DOC USED ===
+api_docs/5.json
+
+=== EXTRACTED CODE USED ===
+agentic_outputs/expand_code/5.md
+
+=== GENERATED CODE RESPONSE ===
+Now I can see the current error handling implementation. The code currently returns HTTP status codes directly without JSON error messages. I need to modify the endpoints to return standardized JSON error responses using the `ErrorResponse` type.
+
+Here are the modifications needed to standardize error responses:
+
+<code filename="types.bal">
+```ballerina
+// Error response type
+public type ErrorResponse record {|
+    string error;
+|};
+```
+</code>
+
+<code filename="main.bal">
+```ballerina
+// Get all books with pagination
+resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns PaginatedBooks|ErrorResponse {\n    totalRequests += 1;\n\n    if page < 1 {\n        return {error: \"Page number must be greater than 0\"};\n    }\n\n    if 'limit < 1 {\n        return {error: \"Limit must be greater than 0\"};\n    }\n\n    Book[] allBooks = bookStore.toArray();\n    int totalCount = allBooks.length();\n    int startIndex = (page - 1) * 'limit;\n\n    if startIndex >= totalCount && totalCount > 0 {\n        return {error: \"Page number exceeds available pages\"};\n    }\n\n    int endIndex = startIndex + 'limit;\n    if endIndex > totalCount {\n        endIndex = totalCount;\n    }\n\n    Book[] paginatedBooks = [];\n    foreach int i in startIndex ..< endIndex {\n        paginatedBooks.push(allBooks[i]);\n    }\n\n    int totalPages = (totalCount + 'limit - 1) / 'limit;\n\n    return {\n        books: paginatedBooks,\n        totalCount: totalCount,\n        currentPage: page,\n        totalPages: totalPages\n    };\n}
+
+// Get a specific book by ID
+resource function get books/[string bookId]() returns Book|ErrorResponse {\n    totalRequests += 1;\n\n    if bookStore.hasKey(k = bookId) {\n        Book book = bookStore.get(k = bookId);\n        return book;\n    }\n    \n    return {error: \"Book not found\"};\n}
+
+// Add a new book
+resource function post books(@http:Payload BookRequest bookRequest) returns http:Created|ErrorResponse {\n    totalRequests += 1;\n\n    Book|error validatedBook = validateAndFormatBook(bookRequest);\n    if validatedBook is error {\n        return {error: validatedBook.message()};\n    }\n\n    bookStore[validatedBook.id] = validatedBook;\n    return http:CREATED;\n}
+
+// Update an existing book
+resource function put books/[string bookId](@http:Payload BookRequest bookRequest) returns Book|ErrorResponse {\n    totalRequests += 1;\n\n    if !bookStore.hasKey(k = bookId) {\n        return {error: \"Book not found\"};\n    }\n\n    Book|error validatedBook = validateAndFormatBook(bookRequest);\n    if validatedBook is error {\n        return {error: validatedBook.message()};\n    }\n\n    // Keep the original book ID\n    Book updatedBook = {\n        ...validatedBook,\n        id: bookId\n    };\n    \n    bookStore[bookId] = updatedBook;\n    return updatedBook;\n}
+
+// Delete a book\nresource function delete books/[string bookId]() returns http:NoContent|ErrorResponse {\n    totalRequests += 1;\n\n    if !bookStore.hasKey(k = bookId) {\n        return {error: \"Book not found\"};\n    }\n\n    _ = bookStore.remove(k = bookId);\n    return http:NO_CONTENT;\n}
+
+// Search for books\nresource function post books/search(@http:Payload BookSearchCriteria searchCriteria) returns Book[]|ErrorResponse {\n    totalRequests += 1;\n\n    Book[] searchResults = [];\n    \n    foreach Book book in bookStore {\n        boolean matches = true;\n        \n        if searchCriteria.title is string {\n            string searchTitle = searchCriteria.title.toLowerAscii();\n            if !book.title.toLowerAscii().includes(searchTitle) {\n                matches = false;\n            }\n        }\n        \n        if matches && searchCriteria.author is string {\n            string searchAuthor = searchCriteria.author.toLowerAscii();\n            if !book.author.toLowerAscii().includes(searchAuthor) {\n                matches = false;\n            }\n        }\n        \n        if matches && searchCriteria.isbn is string {\n            if book.isbn != searchCriteria.isbn {\n                matches = false;\n            }\n        }\n        \n        if matches && searchCriteria.minPrice is decimal {\n            if book.price < searchCriteria.minPrice {\n                matches = false;\n            }\n        }\n        \n        if matches && searchCriteria.maxPrice is decimal {\n            if book.price > searchCriteria.maxPrice {\n                matches = false;\n            }\n        }\n        \n        if matches {\n            searchResults.push(book);\n        }\n    }\n    \n    return searchResults;\n}
+
+// Admin: Add a new category\nresource function post categories(@http:Payload BookCategory category) returns http:Created|ErrorResponse {\n    if category.categoryName.trim().length() == 0 {\n        return {error: \"Category name cannot be empty\"};\n    }\n    \n    if category.categoryId.trim().length() == 0 {\n        return {error: \"Category ID cannot be empty\"};\n    }\n    \n    if bookCategories.hasKey(k = category.categoryId) {\n        return {error: \"Category with this ID already exists\"};\n    }\n    \n    bookCategories[category.categoryId] = category;\n    return http:CREATED;\n}
+```
+</code>
+
+## Summary of Changes
+
+I've standardized the error responses across your bookstore API by:
+
+1. **Modified the ErrorResponse type**: Changed the field name from `message` to `error` to match your requested format `{ "error": "..." }`.
+
+2. **Updated all endpoint return types**: Replaced HTTP status codes like `http:NotFound`, `http:BadRequest`, and `http:InternalServerError` with `ErrorResponse` in the return type unions.
+
+3. **Standardized error messages**: All endpoints now return consistent JSON error objects with descriptive messages:
+   - `{ "error": "Book not found" }` - for missing books
+   - `{ "error": "Page number must be greater than 0" }` - for pagination errors
+   - `{ "error": "Category name cannot be empty" }` - for validation errors
+   - And more specific error messages for different validation scenarios
+
+4. **Maintained success responses**: Success cases still return the appropriate data (Book objects, arrays, or HTTP status codes like `http:Created` and `http:NoContent`).
+
+5. **Improved error handling**: Added better validation for pagination parameters and other edge cases.
+
+Now all your API endpoints will consistently return JSON error objects instead of plain HTTP status codes, making the API more user-friendly and easier to integrate with client applications.
+

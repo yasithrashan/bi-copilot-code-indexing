@@ -1,0 +1,120 @@
+=== QUERY ID 6 ===
+Add a new HTTP server to the current implementation.
+
+=== API DOC USED ===
+api_docs/6.json
+
+=== EXTRACTED CODE USED ===
+agentic_outputs/expand_code/6.md
+
+=== GENERATED CODE RESPONSE ===
+Based on the extracted code, I can see that the current implementation has two services (`/bookstore` and `/admin`) running on the same HTTP listener using `servicePort` (8080). To add a new HTTP server, I'll create a separate HTTP listener on a different port with a new service.
+
+<code filename="main.bal">
+```ballerina
+// Configurable variables
+configurable int servicePort = 8080;
+configurable int apiGatewayPort = 8090; // New configurable for the new HTTP server
+configurable string serviceName = "Bookstore API";
+configurable string apiGatewayName = "API Gateway"; // New configurable for the new server
+configurable int maxBooksPerPage = 10;
+configurable boolean debugMode = false;
+
+// Module level variables
+int totalRequests = 0;
+int apiGatewayRequests = 0; // Track requests for the new server
+time:Utc serviceStartTime = time:utcNow();
+map<BookCategory> bookCategories = {};
+map<Book> bookStore = {};
+
+// HTTP service for bookstore
+service /bookstore on new http:Listener(servicePort) {
+    // Existing bookstore service implementation...
+}
+
+// Admin service endpoint  
+service /admin on new http:Listener(servicePort) {
+    // Existing admin service implementation...
+}
+
+// New API Gateway HTTP server
+service /gateway on new http:Listener(apiGatewayPort) {
+    
+    // Health check endpoint for the gateway
+    resource function get health() returns map<string> {
+        return {
+            "status": "UP",
+            "service": apiGatewayName,
+            "port": apiGatewayPort.toString(),
+            "timestamp": time:utcToString(time:utcNow())
+        };
+    }
+    
+    // Gateway info endpoint
+    resource function get info() returns map<string|int> {
+        apiGatewayRequests += 1;
+        return {
+            "serviceName": apiGatewayName,
+            "port": apiGatewayPort,
+            "totalRequests": apiGatewayRequests,
+            "status": "active"
+        };
+    }
+    
+    // Proxy endpoint to forward requests to bookstore service
+    resource function get books(http:Request req) returns http:Response|error {
+        http:Client bookstoreClient = check new ("http://localhost:" + servicePort.toString());
+        http:Response response = check bookstoreClient->get("/bookstore/books", req.getHeaders());
+        apiGatewayRequests += 1;
+        return response;
+    }
+    
+    // Proxy endpoint for specific book
+    resource function get books/[string bookId](http:Request req) returns http:Response|error {
+        http:Client bookstoreClient = check new ("http://localhost:" + servicePort.toString());
+        http:Response response = check bookstoreClient->get("/bookstore/books/" + bookId, req.getHeaders());
+        apiGatewayRequests += 1;
+        return response;
+    }
+    
+    // Gateway stats endpoint
+    resource function get stats() returns map<string|int> {
+        return {
+            "gatewayName": apiGatewayName,
+            "gatewayPort": apiGatewayPort,
+            "gatewayRequests": apiGatewayRequests,
+            "uptime": time:utcDiffSeconds(time:utcNow(), serviceStartTime),
+            "mainServicePort": servicePort
+        };
+    }
+}
+```
+</code>
+
+I've added a new HTTP server with the following features:
+
+1. **New Configurable Variables**:
+   - `apiGatewayPort` (default: 8090) - Port for the new HTTP server
+   - `apiGatewayName` (default: "API Gateway") - Name for the new service
+
+2. **New Module-Level Variable**:
+   - `apiGatewayRequests` - Track requests to the new server
+
+3. **New HTTP Service** (`/gateway`):
+   - Runs on a separate HTTP listener using `apiGatewayPort`
+   - **Health endpoint** (`GET /gateway/health`) - Health check for the gateway
+   - **Info endpoint** (`GET /gateway/info`) - Gateway information and request count
+   - **Proxy endpoints** - Forward requests to the main bookstore service:
+     - `GET /gateway/books` - Proxy to get all books
+     - `GET /gateway/books/{bookId}` - Proxy to get specific book
+   - **Stats endpoint** (`GET /gateway/stats`) - Gateway-specific statistics
+
+The new HTTP server acts as an API Gateway that can proxy requests to the main bookstore service while maintaining its own request statistics. This architecture allows you to:
+
+- Run services on different ports
+- Implement gateway patterns
+- Add additional routing or middleware logic
+- Monitor traffic through the gateway separately
+
+Both servers will run simultaneously - the original bookstore/admin services on port 8080 and the new gateway service on port 8090.
+
