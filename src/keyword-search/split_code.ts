@@ -276,7 +276,7 @@ export class codeSplitter {
 
     // Save simplified chunks
     saveChunksToJson(chunks: SimpleChunk[], ballerinaDir: string): string {
-        const testsDir = "keyword-search-outputs";
+        const testsDir = "keyword_search_outputs";
         mkdirSync(testsDir, { recursive: true });
 
         const filename = `source_code_split.json`;

@@ -94,8 +94,3 @@ export async function bm25Search(jsonPath: string, query: string, topK = 5, k1 =
     .slice(0, topK);
 }
 
-// Example usage
-if (require.main === module) {
-  const results = bm25Search("keywordsearch_outputs/source_code_split.json", "import http", 5);
-  console.log(results);
-}

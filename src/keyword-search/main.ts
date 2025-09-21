@@ -4,14 +4,16 @@ import { dataExtarctFromExcelSheet } from "../excel";
 import fs from 'fs';
 import path from 'path';
 import { bm25Search } from "./search_algorithm";
+import { codeExpander } from "./code_generation/code_expand"
+import { processAllQueries } from "./code_generation/code";
 
 const filePath = "./ballerina";
-const splitCodeFilePath = './keyword-search-outputs/source_code_split.json'
+const splitCodeFilePath = './keyword_search_outputs/source_code_split.json'
 
 // Use process.cwd() to get the root directory of your project
 const rootDir = process.cwd();
-const dir = path.join(rootDir, 'keyword-search-outputs/keyword_search_result');
-const mdDir = path.join(rootDir, 'keyword-search-outputs/keyword_search_result_md');
+const dir = path.join(rootDir, 'keyword_search_outputs/keyword_search_result');
+const mdDir = path.join(rootDir, 'keyword_search_outputs/keyword_search_result_md');
 
 if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -35,7 +37,7 @@ export async function keywordSearch() {
 
     const outputPath = splitter.saveChunksToJson(allChunks, filePath);
 
-    // Replace this section with Excel extraction
+    // Extract queries from Excel sheet
     const queries = await dataExtarctFromExcelSheet();
 
     // Call the BM25 search algorithm for every user query
@@ -71,4 +73,14 @@ export async function keywordSearch() {
         console.log(`  - JSON: ${jsonFilePath}`);
         console.log(`  - MD: ${mdFilePath}`);
     }
+
+    // After processing all queries, run code expansion
+    console.log('\n=== Starting Code Expansion ===');
+    await codeExpander(queries);
+
+    // After code expansion, run code generation
+    console.log('\n=== Starting Code Generation ===');
+    await processAllQueries(queries);
+
+    console.log('\n=== All workflows completed successfully! ===');
 }
