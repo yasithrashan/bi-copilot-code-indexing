@@ -1,4 +1,5 @@
 import { ragPipeline } from "./rag/main";
+import { keywordSearch } from "./keyword-search/main";
 
 const balFilePath = process.env.BAL_PROJECT_DIRECTORY;
 const voyageApiKey = process.env.VOYAGE_API_KEY;
@@ -11,4 +12,5 @@ if (!voyageApiKey) {
 	throw new Error("VOYAGE_API_KEY environment variable is not set.");
 }
 
-await ragPipeline(balFilePath, voyageApiKey);
+// await ragPipeline(balFilePath, voyageApiKey);
+await keywordSearch();
