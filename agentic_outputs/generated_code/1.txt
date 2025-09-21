@@ -8,7 +8,7 @@ api_docs/1.json
 agentic_outputs/expand_code/1.md
 
 === GENERATED CODE RESPONSE ===
-Now I can see the current pagination implementation. I need to update the GET `/books` endpoint to validate that both `page` and `limit` parameters are greater than zero, and return a 400 Bad Request if they're not valid.
+Now I can see the current pagination implementation. I need to add validation for the 'page' and 'limit' parameters to ensure they are greater than zero, and return a 400 Bad Request if they are not valid.
 
 <code filename="main.bal">
 ```ballerina
@@ -64,19 +64,29 @@ resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns 
 ```
 </code>
 
-The key changes I made:
+The changes I made to update the pagination logic:
 
-1. **Updated the return type**: Added `http:BadRequest` to the return union type to allow returning 400 status codes.
+1. **Updated Return Type**: Changed the return type from `PaginatedBooks|http:InternalServerError` to `PaginatedBooks|http:BadRequest|http:InternalServerError` to include the possibility of returning a 400 Bad Request.
 
-2. **Added validation logic**: Added a validation check at the beginning of the function to ensure both `page` and `limit` parameters are greater than zero.
+2. **Added Parameter Validation**: Added a validation check at the beginning of the function that verifies both `page` and `'limit` parameters are greater than zero:
+   ```ballerina
+   if page <= 0 || 'limit <= 0 {
+       http:BadRequest badRequest = {
+           body: {
+               message: "Page and limit parameters must be greater than zero"
+           }
+       };
+       return badRequest;
+   }
+   ```
 
-3. **Return appropriate error response**: When validation fails, the function now returns an `http:BadRequest` response with a descriptive error message.
+3. **Error Response**: When validation fails, the function now returns a 400 Bad Request with a descriptive error message explaining that both page and limit parameters must be greater than zero.
 
-This update ensures that:
-- If `page` is 0 or negative, a 400 Bad Request is returned
-- If `limit` is 0 or negative, a 400 Bad Request is returned  
-- The error response includes a clear message explaining the validation requirement
-- Valid pagination requests continue to work as before
+This enhancement ensures that:
+- Users cannot request invalid page numbers (≤ 0)
+- Users cannot request invalid limit values (≤ 0) 
+- The API returns a proper HTTP 400 status code with a clear error message when invalid parameters are provided
+- The existing pagination logic remains unchanged for valid parameters
 
-The endpoint will now properly validate pagination parameters and provide meaningful feedback to clients when invalid values are provided.
+The validation happens early in the function, before any processing occurs, making it efficient and preventing potential division by zero or other edge cases that could occur with invalid pagination parameters.
 

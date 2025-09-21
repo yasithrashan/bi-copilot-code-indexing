@@ -178,7 +178,7 @@ Example Codeblock segment:
 
 // Function to save generated code to file
 function saveGeneratedCode(queryId: number, generatedCode: string): void {
-    const outputDir = path.join(process.cwd(), "keyword_search_outputs/llm_response");
+    const outputDir = path.join(process.cwd(), "keyword_search_outputs/generated_code");
 
     // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) {

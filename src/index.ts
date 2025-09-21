@@ -13,8 +13,8 @@ if (!voyageApiKey) {
 	throw new Error("VOYAGE_API_KEY environment variable is not set.");
 }
 
-// await ragPipeline(balFilePath, voyageApiKey);
-// await keywordSearch();
+await ragPipeline(balFilePath, voyageApiKey);
+await keywordSearch();
 await agentWorkflow();
 
 

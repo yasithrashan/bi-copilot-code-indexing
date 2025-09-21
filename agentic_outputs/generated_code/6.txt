@@ -8,113 +8,139 @@ api_docs/6.json
 agentic_outputs/expand_code/6.md
 
 === GENERATED CODE RESPONSE ===
-Based on the extracted code, I can see that the current implementation has two services (`/bookstore` and `/admin`) running on the same HTTP listener using `servicePort` (8080). To add a new HTTP server, I'll create a separate HTTP listener on a different port with a new service.
+Based on the extracted code and the project summary, I can see that the current implementation has two HTTP services (`/bookstore` and `/admin`) running on the same listener at port 8080. To add a new HTTP server, I'll provide you with a few options depending on your needs.
+
+Here's how you can add a new HTTP server:
 
 <code filename="main.bal">
 ```ballerina
-// Configurable variables
-configurable int servicePort = 8080;
-configurable int apiGatewayPort = 8090; // New configurable for the new HTTP server
-configurable string serviceName = "Bookstore API";
-configurable string apiGatewayName = "API Gateway"; // New configurable for the new server
-configurable int maxBooksPerPage = 10;
-configurable boolean debugMode = false;
+// Add a new configurable port for the new server
+configurable int newServerPort = 8081;
+configurable string newServiceName = "Analytics API";
 
-// Module level variables
-int totalRequests = 0;
-int apiGatewayRequests = 0; // Track requests for the new server
-time:Utc serviceStartTime = time:utcNow();
-map<BookCategory> bookCategories = {};
-map<Book> bookStore = {};
-
-// HTTP service for bookstore
-service /bookstore on new http:Listener(servicePort) {
-    // Existing bookstore service implementation...
-}
-
-// Admin service endpoint  
-service /admin on new http:Listener(servicePort) {
-    // Existing admin service implementation...
-}
-
-// New API Gateway HTTP server
-service /gateway on new http:Listener(apiGatewayPort) {
+// Option 1: Add a new service on the same listener (same port)
+service /analytics on new http:Listener(servicePort) {
     
-    // Health check endpoint for the gateway
+    // Health check endpoint
     resource function get health() returns map<string> {
         return {
             "status": "UP",
-            "service": apiGatewayName,
-            "port": apiGatewayPort.toString(),
-            "timestamp": time:utcToString(time:utcNow())
+            "service": newServiceName,
+            "port": servicePort.toString(),
+            "timestamp": time:utcNow()[0].toString()
         };
     }
     
-    // Gateway info endpoint
-    resource function get info() returns map<string|int> {
-        apiGatewayRequests += 1;
+    // Example analytics endpoint
+    resource function get metrics() returns json|http:InternalServerError {
+        do {
+            json metrics = {
+                "totalRequests": totalRequests,
+                "totalBooks": bookStore.length(),
+                "totalCategories": bookCategories.length(),
+                "uptime": time:utcDiffSeconds(time:utcNow()[0], serviceStartTime)
+            };
+            return metrics;
+        } on fail var e {
+            return http:INTERNAL_SERVER_ERROR;
+        }
+    }
+    
+    // Example data export endpoint
+    resource function get 'export/books() returns Book[]|http:InternalServerError {
+        do {
+            return bookStore.toArray();
+        } on fail var e {
+            return http:INTERNAL_SERVER_ERROR;
+        }
+    }
+}
+
+// Option 2: Add a completely new HTTP server on a different port
+service /reporting on new http:Listener(newServerPort) {
+    
+    // Health check for the new server
+    resource function get health() returns map<string> {
         return {
-            "serviceName": apiGatewayName,
-            "port": apiGatewayPort,
-            "totalRequests": apiGatewayRequests,
-            "status": "active"
+            "status": "UP",
+            "service": newServiceName,
+            "port": newServerPort.toString(),
+            "timestamp": time:utcNow()[0].toString()
         };
     }
     
-    // Proxy endpoint to forward requests to bookstore service
-    resource function get books(http:Request req) returns http:Response|error {
-        http:Client bookstoreClient = check new ("http://localhost:" + servicePort.toString());
-        http:Response response = check bookstoreClient->get("/bookstore/books", req.getHeaders());
-        apiGatewayRequests += 1;
-        return response;
+    // Generate reports endpoint
+    resource function get reports/daily() returns json|http:InternalServerError {
+        do {
+            json report = {
+                "reportType": "daily",
+                "generatedAt": time:utcNow()[0].toString(),
+                "totalBooks": bookStore.length(),
+                "totalRequests": totalRequests,
+                "booksByCategory": self.getBooksByCategory()
+            };
+            return report;
+        } on fail var e {
+            return http:INTERNAL_SERVER_ERROR;
+        }
     }
     
-    // Proxy endpoint for specific book
-    resource function get books/[string bookId](http:Request req) returns http:Response|error {
-        http:Client bookstoreClient = check new ("http://localhost:" + servicePort.toString());
-        http:Response response = check bookstoreClient->get("/bookstore/books/" + bookId, req.getHeaders());
-        apiGatewayRequests += 1;
-        return response;
+    // Helper function to get books grouped by category
+    private function getBooksByCategory() returns map<int> {
+        map<int> categoryCount = {};
+        // Logic to count books by category would go here
+        // This is a placeholder implementation
+        return categoryCount;
     }
     
-    // Gateway stats endpoint
-    resource function get stats() returns map<string|int> {
-        return {
-            "gatewayName": apiGatewayName,
-            "gatewayPort": apiGatewayPort,
-            "gatewayRequests": apiGatewayRequests,
-            "uptime": time:utcDiffSeconds(time:utcNow(), serviceStartTime),
-            "mainServicePort": servicePort
-        };
+    // Download report as file
+    resource function get reports/download/[string reportType]() returns http:Response|http:BadRequest|http:InternalServerError {
+        if reportType != "daily" && reportType != "weekly" && reportType != "monthly" {
+            return http:BAD_REQUEST;
+        }
+        
+        do {
+            http:Response response = new;
+            json reportData = {
+                "reportType": reportType,
+                "data": bookStore.toArray(),
+                "generatedAt": time:utcNow()[0].toString()
+            };
+            
+            response.setJsonPayload(reportData);
+            response.setHeader("Content-Disposition", string `attachment; filename=${reportType}_report.json`);
+            response.setHeader("Content-Type", "application/json");
+            
+            return response;
+        } on fail var e {
+            return http:INTERNAL_SERVER_ERROR;
+        }
     }
 }
 ```
 </code>
 
-I've added a new HTTP server with the following features:
+The code above shows two approaches:
 
-1. **New Configurable Variables**:
-   - `apiGatewayPort` (default: 8090) - Port for the new HTTP server
-   - `apiGatewayName` (default: "API Gateway") - Name for the new service
+1. **Option 1 - Same Port Different Path** (`/analytics`): Adds a new service on the same HTTP listener (port 8080) with a different base path. This is useful when you want related services on the same port.
 
-2. **New Module-Level Variable**:
-   - `apiGatewayRequests` - Track requests to the new server
+2. **Option 2 - Different Port** (`/reporting`): Creates a completely separate HTTP server on a different port (8081). This is useful when you want to separate concerns or have different security/access requirements.
 
-3. **New HTTP Service** (`/gateway`):
-   - Runs on a separate HTTP listener using `apiGatewayPort`
-   - **Health endpoint** (`GET /gateway/health`) - Health check for the gateway
-   - **Info endpoint** (`GET /gateway/info`) - Gateway information and request count
-   - **Proxy endpoints** - Forward requests to the main bookstore service:
-     - `GET /gateway/books` - Proxy to get all books
-     - `GET /gateway/books/{bookId}` - Proxy to get specific book
-   - **Stats endpoint** (`GET /gateway/stats`) - Gateway-specific statistics
+**Key Features Added:**
 
-The new HTTP server acts as an API Gateway that can proxy requests to the main bookstore service while maintaining its own request statistics. This architecture allows you to:
+- **New configurable variables** for the new server port and service name
+- **Health endpoints** for both new services
+- **Analytics service** with metrics and data export capabilities
+- **Reporting service** with report generation and download functionality
+- **Proper error handling** following the existing pattern
+- **Integration with existing data** (bookStore, bookCategories, totalRequests)
 
-- Run services on different ports
-- Implement gateway patterns
-- Add additional routing or middleware logic
-- Monitor traffic through the gateway separately
+**Benefits:**
 
-Both servers will run simultaneously - the original bookstore/admin services on port 8080 and the new gateway service on port 8090.
+- **Modular design**: Each service has a specific purpose
+- **Scalable**: Easy to add more endpoints to each service
+- **Consistent**: Follows the same patterns as existing services
+- **Configurable**: Port and service names can be configured
+
+You can choose either option or implement both depending on your specific requirements. The new servers will run alongside your existing bookstore and admin services.
 

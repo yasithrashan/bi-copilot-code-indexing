@@ -8,7 +8,7 @@ api_docs/4.json
 agentic_outputs/expand_code/4.md
 
 === GENERATED CODE RESPONSE ===
-Now I can see the current category service implementation. I need to extend it with PUT and DELETE operations for categories. Based on the extracted code, I can see the current structure and add the missing operations.
+Now I'll extend the category service to support update and delete operations. Based on the extracted code, I can see the current admin service has POST and GET operations for categories. I'll add PUT and DELETE operations.
 
 <code filename="main.bal">
 ```ballerina
@@ -31,26 +31,11 @@ service /admin on new http:Listener(servicePort) {
         return bookCategories.toArray();
     }
 
-    // Get category by ID
-    resource function get categories/[string categoryId]() returns BookCategory|http:NotFound|http:InternalServerError {
+    // Update book category
+    resource function put categories/[string categoryId](@http:Payload BookCategory category) returns BookCategory|http:NotFound|http:BadRequest {
         totalRequests += 1;
 
-        if !bookCategories.hasKey(categoryId) {
-            return http:NOT_FOUND;
-        }
-
-        BookCategory? category = bookCategories[categoryId];
-        if category is BookCategory {
-            return category;
-        }
-        return http:INTERNAL_SERVER_ERROR;
-    }
-
-    // Update category
-    resource function put categories/[string categoryId](@http:Payload BookCategory updatedCategory) returns BookCategory|http:NotFound|http:BadRequest|http:InternalServerError {
-        totalRequests += 1;
-
-        if updatedCategory.categoryName.trim().length() == 0 {
+        if category.categoryName.trim().length() == 0 {
             return http:BAD_REQUEST;
         }
 
@@ -58,62 +43,62 @@ service /admin on new http:Listener(servicePort) {
             return http:NOT_FOUND;
         }
 
-        // Update the category with the provided categoryId
-        BookCategory categoryToUpdate = {
+        // Ensure the categoryId in the path matches the one in the payload
+        BookCategory updatedCategory = {
             categoryId: categoryId,
-            categoryName: updatedCategory.categoryName,
-            description: updatedCategory.description
+            categoryName: category.categoryName,
+            description: category.description
         };
 
-        bookCategories[categoryId] = categoryToUpdate;
-        return categoryToUpdate;
+        bookCategories[categoryId] = updatedCategory;
+        return updatedCategory;
     }
 
-    // Delete category
-    resource function delete categories/[string categoryId]() returns http:NoContent|http:NotFound|http:InternalServerError {
+    // Delete book category
+    resource function delete categories/[string categoryId]() returns http:NoContent|http:NotFound {
         totalRequests += 1;
 
         if !bookCategories.hasKey(categoryId) {
             return http:NOT_FOUND;
         }
 
-        BookCategory removedCategory = bookCategories.remove(categoryId);
+        _ = bookCategories.remove(categoryId);
         return http:NO_CONTENT;
+    }
+
+    // Get specific category by ID
+    resource function get categories/[string categoryId]() returns BookCategory|http:NotFound {
+        totalRequests += 1;
+
+        if !bookCategories.hasKey(categoryId) {
+            return http:NOT_FOUND;
+        }
+
+        return bookCategories.get(categoryId);
     }
 }
 ```
 </code>
 
-I've extended the category service in the admin endpoints with the following new operations:
+The extended category service now includes:
 
-## New Category Operations Added:
+1. **PUT `/admin/categories/{categoryId}`** - Updates an existing category
+   - Takes the category ID as a path parameter
+   - Accepts a `BookCategory` payload with updated information
+   - Validates that the category name is not empty
+   - Returns `404 Not Found` if the category doesn't exist
+   - Returns `400 Bad Request` for invalid data
+   - Returns the updated category on success
 
-### 1. **GET `/admin/categories/[categoryId]`**
-- Retrieves a specific category by ID
-- Returns `BookCategory` if found, `404 Not Found` if category doesn't exist
-- Returns `500 Internal Server Error` for unexpected errors
+2. **DELETE `/admin/categories/{categoryId}`** - Deletes a category
+   - Takes the category ID as a path parameter
+   - Returns `404 Not Found` if the category doesn't exist
+   - Returns `204 No Content` on successful deletion
 
-### 2. **PUT `/admin/categories/[categoryId]`**
-- Updates an existing category
-- Takes a `BookCategory` object in the request body
-- Validates that the category name is not empty
-- Returns the updated `BookCategory` on success
-- Returns `404 Not Found` if category doesn't exist
-- Returns `400 Bad Request` for invalid data
-- The categoryId in the URL takes precedence over the one in the request body
+3. **GET `/admin/categories/{categoryId}`** - Retrieves a specific category (bonus endpoint)
+   - Takes the category ID as a path parameter
+   - Returns the category if found
+   - Returns `404 Not Found` if the category doesn't exist
 
-### 3. **DELETE `/admin/categories/[categoryId]`**
-- Deletes a category by ID
-- Returns `204 No Content` on successful deletion
-- Returns `404 Not Found` if category doesn't exist
-- Returns `500 Internal Server Error` for unexpected errors
-
-## Key Features:
-- **Proper error handling**: Each endpoint handles missing categories and validation errors
-- **Request counting**: All endpoints increment the `totalRequests` counter
-- **Validation**: Category name validation ensures empty names are rejected
-- **RESTful design**: Follows REST conventions with appropriate HTTP methods and status codes
-- **Path parameter handling**: Uses Ballerina's path parameter syntax `[string categoryId]`
-
-The extended service now provides full CRUD (Create, Read, Update, Delete) operations for book categories, making it a complete category management system.
+These new endpoints follow RESTful conventions and maintain consistency with the existing bookstore API patterns, including proper error handling and request counting for statistics.
 

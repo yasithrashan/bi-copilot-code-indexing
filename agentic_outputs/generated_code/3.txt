@@ -8,7 +8,7 @@ api_docs/3.json
 agentic_outputs/expand_code/3.md
 
 === GENERATED CODE RESPONSE ===
-Now I can see the current implementation of the update books endpoint and the relevant type definitions. I need to modify the PUT endpoint to check for duplicate ISBNs before updating the book. I'll add a 409 Conflict response to the return type and implement the ISBN validation logic.
+Now I can see the current implementation of the PUT books endpoint. I need to modify it to check for duplicate ISBNs before updating the book and return a 409 Conflict error if a duplicate is found. Here's the modified code:
 
 <code filename="main.bal">
 ```ballerina
@@ -20,10 +20,23 @@ resource function put books/[string bookId](@http:Payload BookRequest bookReques
         return http:NOT_FOUND;
     }
 
-    // Check for duplicate ISBN (excluding the current book being updated)
-    foreach Book book in bookStore {
-        if book.isbn == bookRequest.isbn && book.id != bookId {
-            return http:CONFLICT;
+    // Get the current book to preserve its ISBN if not being updated
+    Book? currentBook = bookStore[bookId];
+    if currentBook is () {
+        return http:NOT_FOUND;
+    }
+
+    // Check for duplicate ISBN only if the ISBN is being changed
+    if currentBook.isbn != bookRequest.isbn {
+        // Check if another book with the same ISBN already exists
+        foreach Book book in bookStore.toArray() {
+            if book.isbn == bookRequest.isbn && book.id != bookId {
+                http:Conflict conflictResponse = http:CONFLICT;
+                conflictResponse.setPayload({
+                    message: string `Book with ISBN '${bookRequest.isbn}' already exists`
+                });
+                return conflictResponse;
+            }
         }
     }
 
@@ -46,11 +59,13 @@ The key changes I made to the update books endpoint:
 
 1. **Added `http:Conflict` to the return type** - This allows the endpoint to return a 409 Conflict status code.
 
-2. **Added ISBN duplicate validation** - Before updating the book, I iterate through all books in the `bookStore` to check if any other book (with a different ID) already has the same ISBN as the one being updated.
+2. **Added duplicate ISBN check** - Before updating the book, the code now checks if another book with the same ISBN already exists in the store.
 
-3. **Excluded current book from validation** - The validation uses `book.id != bookId` to ensure we don't consider the book being updated as a duplicate of itself.
+3. **Optimized the check** - The duplicate check only runs if the ISBN is actually being changed from the current value, avoiding unnecessary iterations.
 
-4. **Return 409 Conflict** - If a duplicate ISBN is found, the endpoint returns `http:CONFLICT`, which translates to a 409 status code.
+4. **Proper conflict response** - When a duplicate ISBN is found, it returns an `http:Conflict` response with a descriptive error message indicating which ISBN already exists.
 
-This modification ensures data integrity by preventing duplicate ISBNs in the bookstore while allowing users to update other fields of an existing book without ISBN conflicts.
+5. **Maintained existing logic** - The existing validation for book existence (404 Not Found) is preserved.
+
+Now when you try to update a book with an ISBN that already exists for another book, the endpoint will return a 409 Conflict status with an appropriate error message instead of allowing the duplicate.
 
