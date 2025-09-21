@@ -1,4 +1,5 @@
 import { ragPipeline } from "./rag/main";
+import { keywordSearch } from "./keyword-search/main";
 
 const balFilePath = process.env.BAL_PROJECT_DIRECTORY;
 const voyageApiKey = process.env.VOYAGE_API_KEY;
@@ -12,3 +13,4 @@ if (!voyageApiKey) {
 }
 
 await ragPipeline(balFilePath, voyageApiKey);
+await keywordSearch();

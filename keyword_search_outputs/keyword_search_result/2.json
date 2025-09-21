@@ -1,0 +1,27 @@
+[
+  {
+    "id": "6b2159a447de8988",
+    "content": "function validateAndFormatBook(BookRequest bookRequest) returns Book|error {\n    if bookRequest.title.trim().length() == 0 {\n        return error(\"Book title cannot be empty\");\n    }\n\n    if bookRequest.author.trim().length() == 0 {\n        return error(\"Book author cannot be empty\");\n    }\n\n    if bookRequest.price < 0.0d {\n        return error(\"Book price cannot be negative\");\n    }\n\n    if bookRequest.quantity < 0 {\n        return error(\"Book quantity cannot be negative\");\n    }\n\n    string bookId = uuid:createType1AsString();\n\n    Book validatedBook = {\n        id: bookId,\n        title: bookRequest.title.trim(),\n        author: bookRequest.author.trim(),\n        isbn: bookRequest.isbn.trim(),\n        price: bookRequest.price,\n        quantity: bookRequest.quantity\n    };\n\n    return validatedBook;\n}",
+    "score": 5.715150168630998
+  },
+  {
+    "id": "b71ed9d1cfeac8c4",
+    "content": "Book|error validatedBook = validateAndFormatBook(bookRequest);",
+    "score": 3.620416145659607
+  },
+  {
+    "id": "c35d06be35ebb271",
+    "content": "string bookId = uuid:createType1AsString();",
+    "score": 2.869295819572529
+  },
+  {
+    "id": "fc2e7e4b21fc3ec8",
+    "content": "Book book = bookStore.get(k = bookId);",
+    "score": 2.6271043787645314
+  },
+  {
+    "id": "bf62c5ab5502e978",
+    "content": "Book removedBook = bookStore.remove(k = bookId);",
+    "score": 2.6271043787645314
+  }
+]
