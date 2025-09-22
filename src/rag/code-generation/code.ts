@@ -1,6 +1,7 @@
 import { generateText, stepCountIs } from "ai";
 import { ANTHROPIC_SONNET_4, getAnthropicClinet } from "./connection";
 import { anthropic } from "@ai-sdk/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { Library } from "../../libs/types";
@@ -12,17 +13,67 @@ interface UserQuery {
     query: string;
 }
 
-// Generate Ballerina code function
-async function generateBallerinaCode(
+// Add interface for token usage
+interface TokenUsage {
+    langLibs: number;
+    apiDocs: number;
+    expandedCode: number;
+    userQuery: number;
+    systemPrompt: number;
+    generatedCode: number;
+    totalInput: number;
+}
+
+// Initialize Anthropic client for token counting
+const anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Function to count tokens using official Anthropic API
+async function countTokens(text: string): Promise<number> {
+    try {
+        const response = await anthropicClient.messages.countTokens({
+            model: "claude-3-5-sonnet-20241022",
+            messages: [{ role: "user", content: text }]
+        });
+        return response.input_tokens;
+    } catch (error) {
+        console.error("Error counting tokens:", error);
+        return -1;
+
+    }
+}
+
+async function generateBallerinaCodeWithTokens(
     userQuery: string,
     API_DOC: Library,
     expandedCode: string
-): Promise<string> {
+): Promise<{ code: string; tokenUsage: TokenUsage }> {
     const systemPromptPrefix = getSystemPromptPrefix([API_DOC], expandedCode);
     const systemPromptSuffix = getSystemPromptSuffix(LANGLIBS as Library[]);
     const systemPrompt = systemPromptPrefix + "\n\n" + systemPromptSuffix;
 
+    console.log("Counting tokens for each component...");
+
+    // Count tokens for each component
+    const [
+        langLibsTokens,
+        apiDocsTokens,
+        expandedCodeTokens,
+        userQueryTokens,
+        systemPromptTokens
+    ] = await Promise.all([
+        countTokens(JSON.stringify(LANGLIBS)),
+        countTokens(JSON.stringify(API_DOC)),
+        countTokens(expandedCode),
+        countTokens(userQuery),
+        countTokens(systemPrompt)
+    ]);
+
+    const totalInputTokens = systemPromptTokens + userQueryTokens;
+
     console.log("Generating Code...");
+    console.log(`Token usage - LangLibs: ${langLibsTokens}, API Docs: ${apiDocsTokens}, Expanded Code: ${expandedCodeTokens}, User Query: ${userQueryTokens}, System Prompt: ${systemPromptTokens}, Total Input: ${totalInputTokens}`);
 
     const result = await generateText({
         model: anthropic(getAnthropicClinet(ANTHROPIC_SONNET_4)),
@@ -34,7 +85,37 @@ async function generateBallerinaCode(
         maxOutputTokens: 8192,
     });
 
-    return result.text;
+    // Count tokens in generated code
+    const generatedCodeTokens = await countTokens(result.text);
+
+    const tokenUsage: TokenUsage = {
+        langLibs: langLibsTokens,
+        apiDocs: apiDocsTokens,
+        expandedCode: expandedCodeTokens,
+        userQuery: userQueryTokens,
+        systemPrompt: systemPromptTokens,
+        generatedCode: generatedCodeTokens,
+        totalInput: totalInputTokens
+    };
+
+    return {
+        code: result.text,
+        tokenUsage
+    };
+}
+
+// Function to save token usage statistics
+async function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): Promise<void> {
+    const outputDir = path.join(process.cwd(), "rag_outputs/token_usage");
+
+    try {
+        await fs.mkdir(outputDir, { recursive: true });
+    } catch (error) {
+    }
+
+    const outputPath = path.join(outputDir, `${queryId}.json`);
+    await fs.writeFile(outputPath, JSON.stringify(tokenUsage, null, 2), "utf-8");
+    console.log(`Token usage saved to: ${outputPath}`);
 }
 
 // Updated helper function to include expanded code context
@@ -188,11 +269,14 @@ async function saveGeneratedCode(queryId: number, generatedCode: string): Promis
     console.log(`Generated code saved to: ${outputPath}`);
 }
 
-// Function to process code generation for a single query - to be integrated into RAG pipeline
+// Updated function to process code generation for a single query with token tracking
 export async function processCodeGenerationForQuery(
     queryId: number,
     queryText: string
-): Promise<void> {
+): Promise<TokenUsage> {
+
+    const excelFilePath: string = path.join(process.cwd(), 'rag_outputs', 'token_usage.xlsx')
+
     try {
         console.log(`Processing code generation for query ${queryId}: ${queryText}`);
 
@@ -204,42 +288,26 @@ export async function processCodeGenerationForQuery(
         const expandedCode = await loadExpandedCodeForQuery(queryId);
         console.log(`Loaded expanded code for query ${queryId}`);
 
-        // Generate Ballerina code
-        const generatedCode = await generateBallerinaCode(
+        // Generate Ballerina code with token tracking
+        const result = await generateBallerinaCodeWithTokens(
             queryText,
             apiDocs,
             expandedCode
         );
 
         // Save generated code
-        await saveGeneratedCode(queryId, generatedCode);
+        await saveGeneratedCode(queryId, result.code);
+
+        // Save token usage
+        await saveTokenUsage(queryId, result.tokenUsage);
 
         console.log(`Successfully processed code generation for query ${queryId}`);
+        console.log(`Token usage:`, result.tokenUsage);
+
+        return result.tokenUsage;
 
     } catch (error) {
         console.error(`Error processing code generation for query ${queryId}:`, error);
         throw error; // Re-throw to let the caller handle it
     }
-}
-
-// Function to process code generation for all queries (if needed)
-export async function processAllQueriesCodeGeneration(userQueries: UserQuery[]): Promise<void> {
-    console.log(`Processing code generation for ${userQueries.length} user queries...`);
-
-    for (let i = 0; i < userQueries.length; i++) {
-        const currentQuery = userQueries[i];
-        if (!currentQuery) {
-            console.warn(`Skipping undefined query at index ${i}`);
-            continue;
-        }
-
-        try {
-            await processCodeGenerationForQuery(currentQuery.id, currentQuery.query);
-        } catch (error) {
-            console.error(`Error processing code generation for query ${currentQuery.id}:`, error);
-            // Continue with next query instead of stopping
-        }
-    }
-
-    console.log("All code generation queries processed");
 }
