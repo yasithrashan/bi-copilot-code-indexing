@@ -1,0 +1,11 @@
+{
+  "langLibs": 13563,
+  "apiDocs": 606,
+  "balMdContent": 1423,
+  "extractedCode": 256,
+  "userQuery": 22,
+  "systemPrompt": 16867,
+  "generatedCode": 696,
+  "totalInput": 17159,
+  "toolCalls": 14
+}

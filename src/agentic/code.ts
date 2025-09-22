@@ -1,6 +1,7 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { ANTHROPIC_SONNET_4, getAnthropicClinet } from "./connection";
 import { anthropic } from "@ai-sdk/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
 import type { Library } from "../libs/types";
 import { LANGLIBS } from "../libs/langlibs";
@@ -8,9 +9,49 @@ import path from "path";
 import { z } from "zod";
 import { dataExtarctFromExcelSheet } from "../excel";
 
+// Add interface for token usage
+interface TokenUsage {
+    langLibs: number;
+    apiDocs: number;
+    balMdContent: number;
+    extractedCode: number;
+    userQuery: number;
+    systemPrompt: number;
+    generatedCode: number;
+    totalInput: number;
+    toolCalls: number;
+}
+
+// Add interface for query processing result
+interface QueryProcessingResult {
+    queryId: number;
+    success: boolean;
+    tokenUsage?: TokenUsage;
+    error?: string;
+}
+
+// Initialize Anthropic client for token counting
+const anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
 // API Docs directory
 const apiDocsDir = 'api_docs';
 const LANG_LIB = LANGLIBS as Library[];
+
+// Function to count tokens using official Anthropic API
+async function countTokens(text: string): Promise<number> {
+    try {
+        const response = await anthropicClient.messages.countTokens({
+            model: "claude-3-5-sonnet-20241022",
+            messages: [{ role: "user", content: text }]
+        });
+        return response.input_tokens;
+    } catch (error) {
+        console.error("Error counting tokens:", error);
+        return -1;
+    }
+}
 
 // Function to load API doc for specific query ID
 function loadApiDocForQuery(queryId: number): Library {
@@ -31,11 +72,11 @@ function loadApiDocForQuery(queryId: number): Library {
 // Load bal.md file path (don't read it at module level)
 const balMdPath = 'agentic_outputs/bal.md';
 
-// Generate Ballerina code function
-async function generateBallerinaCode(
+// Updated Generate Ballerina code function with token tracking
+async function generateBallerinaCodeWithTokens(
     userQuery: string,
     queryId: number
-): Promise<string> {
+): Promise<{ code: string; tokenUsage: TokenUsage }> {
     // Load the specific API doc for this query
     const API_DOC = loadApiDocForQuery(queryId);
     console.log(`Loaded API documentation for Query ID ${queryId}`);
@@ -51,9 +92,35 @@ async function generateBallerinaCode(
 
     const systemPromptPrefix = getSystemPromptPrefix([API_DOC]);
     const systemPromptSuffix = getSystemPromptSuffix(LANG_LIB, queryId);
-    const systemPrompt = systemPromptPrefix + "\n\n" + systemPromptSuffix + "\n\n" + getSystemPromptBalMd(balMdContent);
+    const systemPromptBalMd = getSystemPromptBalMd(balMdContent);
+    const systemPrompt = systemPromptPrefix + "\n\n" + systemPromptSuffix + "\n\n" + systemPromptBalMd;
+
+    console.log("Counting tokens for each component...");
+
+    // Count tokens for each component
+    const [
+        langLibsTokens,
+        apiDocsTokens,
+        balMdContentTokens,
+        userQueryTokens,
+        systemPromptTokens
+    ] = await Promise.all([
+        countTokens(JSON.stringify(LANG_LIB)),
+        countTokens(JSON.stringify(API_DOC)),
+        countTokens(balMdContent),
+        countTokens(userQuery),
+        countTokens(systemPrompt)
+    ]);
+
+    const totalInputTokens = systemPromptTokens + userQueryTokens;
+
+    console.log(`Token usage - LangLibs: ${langLibsTokens}, API Docs: ${apiDocsTokens}, BalMd: ${balMdContentTokens}, User Query: ${userQueryTokens}, System Prompt: ${systemPromptTokens}, Total Input: ${totalInputTokens}`);
 
     console.log(`Generating Code for Query ID ${queryId}...`);
+
+    // Variable to track extracted code tokens
+    let extractedCodeTokens = 0;
+    let toolCallsTokens = 0;
 
     const result = await generateText({
         model: anthropic(getAnthropicClinet(ANTHROPIC_SONNET_4)),
@@ -71,16 +138,24 @@ async function generateBallerinaCode(
 
                     if (!fs.existsSync(extractFilePath)) {
                         console.log(`No extract file found for Query ID ${queryId}, will generate from scratch`);
-                        return { actualCode: "No relevant code context found. Generating from scratch based on bal.md content." };
+                        const noCodeMessage = "No relevant code context found. Generating from scratch based on bal.md content.";
+                        extractedCodeTokens = await countTokens(noCodeMessage);
+                        toolCallsTokens = await countTokens("extractRelevantCode tool call");
+                        return { actualCode: noCodeMessage };
                     }
 
                     const content = fs.readFileSync(extractFilePath, "utf-8");
                     if (!content.length) {
                         console.log(`Extract file is empty for Query ID ${queryId}, will generate from scratch`);
-                        return { actualCode: "Extract file is empty. Generating from scratch based on bal.md content." };
+                        const emptyMessage = "Extract file is empty. Generating from scratch based on bal.md content.";
+                        extractedCodeTokens = await countTokens(emptyMessage);
+                        toolCallsTokens = await countTokens("extractRelevantCode tool call");
+                        return { actualCode: emptyMessage };
                     }
 
                     console.log(`Successfully extracted relevant code for Query ID ${queryId}`);
+                    extractedCodeTokens = await countTokens(content);
+                    toolCallsTokens = await countTokens("extractRelevantCode tool call");
                     return { actualCode: content };
                 }
             })
@@ -89,11 +164,115 @@ async function generateBallerinaCode(
         maxOutputTokens: 4096,
     });
 
-    return result.text;
+    // Count tokens in generated code
+    const generatedCodeTokens = await countTokens(result.text);
+
+    const tokenUsage: TokenUsage = {
+        langLibs: langLibsTokens,
+        apiDocs: apiDocsTokens,
+        balMdContent: balMdContentTokens,
+        extractedCode: extractedCodeTokens,
+        userQuery: userQueryTokens,
+        systemPrompt: systemPromptTokens,
+        generatedCode: generatedCodeTokens,
+        totalInput: totalInputTokens + extractedCodeTokens + toolCallsTokens,
+        toolCalls: toolCallsTokens
+    };
+
+    return {
+        code: result.text,
+        tokenUsage
+    };
 }
 
-// Process all queries for code generation
+// Function to save token usage statistics
+function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): void {
+    const outputDir = path.join(process.cwd(), "agentic_outputs/token_usage");
+
+    // Create output directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputPath = path.join(outputDir, `${queryId}.json`);
+    fs.writeFileSync(outputPath, JSON.stringify(tokenUsage, null, 2), "utf-8");
+    console.log(`Token usage saved to: ${outputPath}`);
+}
+
+// Function to save aggregated token usage statistics
+function saveAggregatedTokenUsage(results: QueryProcessingResult[]): void {
+    const successfulResults = results.filter(r => r.success && r.tokenUsage);
+
+    if (successfulResults.length === 0) {
+        console.log("No successful queries to aggregate token usage for");
+        return;
+    }
+
+    const aggregated = {
+        totalQueries: results.length,
+        successfulQueries: successfulResults.length,
+        failedQueries: results.length - successfulResults.length,
+        tokenUsage: {
+            totalLangLibs: 0,
+            totalApiDocs: 0,
+            totalBalMdContent: 0,
+            totalExtractedCode: 0,
+            totalUserQueries: 0,
+            totalSystemPrompts: 0,
+            totalGeneratedCode: 0,
+            totalInput: 0,
+            totalToolCalls: 0,
+            averageLangLibs: 0,
+            averageApiDocs: 0,
+            averageBalMdContent: 0,
+            averageExtractedCode: 0,
+            averageUserQuery: 0,
+            averageSystemPrompt: 0,
+            averageGeneratedCode: 0,
+            averageInput: 0,
+            averageToolCalls: 0
+        },
+        queryDetails: successfulResults.map(r => ({
+            queryId: r.queryId,
+            tokenUsage: r.tokenUsage
+        }))
+    };
+
+    // Calculate totals
+    successfulResults.forEach(result => {
+        const usage = result.tokenUsage!;
+        aggregated.tokenUsage.totalLangLibs += usage.langLibs;
+        aggregated.tokenUsage.totalApiDocs += usage.apiDocs;
+        aggregated.tokenUsage.totalBalMdContent += usage.balMdContent;
+        aggregated.tokenUsage.totalExtractedCode += usage.extractedCode;
+        aggregated.tokenUsage.totalUserQueries += usage.userQuery;
+        aggregated.tokenUsage.totalSystemPrompts += usage.systemPrompt;
+        aggregated.tokenUsage.totalGeneratedCode += usage.generatedCode;
+        aggregated.tokenUsage.totalInput += usage.totalInput;
+        aggregated.tokenUsage.totalToolCalls += usage.toolCalls;
+    });
+
+    // Calculate averages
+    const count = successfulResults.length;
+    aggregated.tokenUsage.averageLangLibs = Math.round(aggregated.tokenUsage.totalLangLibs / count);
+    aggregated.tokenUsage.averageApiDocs = Math.round(aggregated.tokenUsage.totalApiDocs / count);
+    aggregated.tokenUsage.averageBalMdContent = Math.round(aggregated.tokenUsage.totalBalMdContent / count);
+    aggregated.tokenUsage.averageExtractedCode = Math.round(aggregated.tokenUsage.totalExtractedCode / count);
+    aggregated.tokenUsage.averageUserQuery = Math.round(aggregated.tokenUsage.totalUserQueries / count);
+    aggregated.tokenUsage.averageSystemPrompt = Math.round(aggregated.tokenUsage.totalSystemPrompts / count);
+    aggregated.tokenUsage.averageGeneratedCode = Math.round(aggregated.tokenUsage.totalGeneratedCode / count);
+    aggregated.tokenUsage.averageInput = Math.round(aggregated.tokenUsage.totalInput / count);
+    aggregated.tokenUsage.averageToolCalls = Math.round(aggregated.tokenUsage.totalToolCalls / count);
+
+    const outputPath = path.join(process.cwd(), "agentic_outputs/token_usage", "aggregated_stats.json");
+    fs.writeFileSync(outputPath, JSON.stringify(aggregated, null, 2), "utf-8");
+    console.log(`Aggregated token usage saved to: ${outputPath}`);
+}
+
+// Updated process all queries function with token tracking
 export async function generateCodeForAllQueries(): Promise<void> {
+    const results: QueryProcessingResult[] = [];
+
     try {
         // Check if bal.md exists
         if (!fs.existsSync(balMdPath)) {
@@ -115,10 +294,14 @@ export async function generateCodeForAllQueries(): Promise<void> {
         const queries = await dataExtarctFromExcelSheet();
         console.log(`Found ${queries.length} queries to process for code generation`);
 
-        // Ensure output directory
+        // Ensure output directories
         const outputDir = path.join(process.cwd(), "agentic_outputs/generated_code");
+        const tokenUsageDir = path.join(process.cwd(), "agentic_outputs/token_usage");
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
+        }
+        if (!fs.existsSync(tokenUsageDir)) {
+            fs.mkdirSync(tokenUsageDir, { recursive: true });
         }
 
         // Process each query
@@ -131,11 +314,16 @@ export async function generateCodeForAllQueries(): Promise<void> {
                 const apiDocPath = path.join(apiDocsDir, `${queryItem.id}.json`);
                 if (!fs.existsSync(apiDocPath)) {
                     console.log(`API doc not found for Query ID ${queryItem.id}, skipping...`);
+                    results.push({
+                        queryId: queryItem.id,
+                        success: false,
+                        error: "API doc not found"
+                    });
                     continue;
                 }
 
-                // Generate the code
-                const response = await generateBallerinaCode(queryItem.query, queryItem.id);
+                // Generate the code with token tracking
+                const result = await generateBallerinaCodeWithTokens(queryItem.query, queryItem.id);
                 const outputPath = path.join(outputDir, `${queryItem.id}.txt`);
 
                 // Final content with response
@@ -148,8 +336,11 @@ ${apiDocPath}
 === EXTRACTED CODE USED ===
 agentic_outputs/expand_code/${queryItem.id}.md
 
+=== TOKEN USAGE ===
+${JSON.stringify(result.tokenUsage, null, 2)}
+
 === GENERATED CODE RESPONSE ===
-${response}
+${result.code}
 
 `;
 
@@ -157,8 +348,25 @@ ${response}
                 fs.writeFileSync(outputPath, finalContent, "utf-8");
                 console.log(`Code generation completed for Query ID ${queryItem.id} -> saved as ${queryItem.id}.txt`);
 
+                // Save token usage
+                saveTokenUsage(queryItem.id, result.tokenUsage);
+
+                console.log(`Token usage:`, result.tokenUsage);
+
+                results.push({
+                    queryId: queryItem.id,
+                    success: true,
+                    tokenUsage: result.tokenUsage
+                });
+
             } catch (error) {
                 console.error(`Failed to generate code for Query ID ${queryItem.id}:`, error);
+
+                results.push({
+                    queryId: queryItem.id,
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error)
+                });
 
                 // Save error log
                 const errorPath = path.join(outputDir, `${queryItem.id}_ERROR.txt`);
@@ -178,10 +386,65 @@ ${new Date().toISOString()}
             }
         }
 
+        // Save aggregated token usage statistics
+        saveAggregatedTokenUsage(results);
+
         console.log(`\nAll code generation tasks completed! Results saved in: ${outputDir}`);
+        console.log(`Token usage statistics saved in: ${tokenUsageDir}`);
+
+        // Print summary
+        const successful = results.filter(r => r.success).length;
+        const failed = results.length - successful;
+        console.log(`\n=== SUMMARY ===`);
+        console.log(`Total queries processed: ${results.length}`);
+        console.log(`Successful: ${successful}`);
+        console.log(`Failed: ${failed}`);
 
     } catch (error) {
         console.error("[ERROR] Failed to process queries for code generation:", error);
+        throw error;
+    }
+}
+
+// Export individual function for single query processing
+export async function processAgenticCodeGenerationForQuery(
+    queryId: number,
+    queryText: string
+): Promise<TokenUsage> {
+    try {
+        console.log(`Processing agentic code generation for query ${queryId}: ${queryText}`);
+
+        // Generate Ballerina code with token tracking
+        const result = await generateBallerinaCodeWithTokens(queryText, queryId);
+
+        // Save generated code
+        const outputDir = path.join(process.cwd(), "agentic_outputs/generated_code");
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        const outputPath = path.join(outputDir, `${queryId}.txt`);
+        const finalContent = `=== QUERY ID ${queryId} ===
+${queryText}
+
+=== TOKEN USAGE ===
+${JSON.stringify(result.tokenUsage, null, 2)}
+
+=== GENERATED CODE RESPONSE ===
+${result.code}
+`;
+        fs.writeFileSync(outputPath, finalContent, "utf-8");
+
+        // Save token usage
+        saveTokenUsage(queryId, result.tokenUsage);
+
+        console.log(`Successfully processed agentic code generation for query ${queryId}`);
+        console.log(`Token usage:`, result.tokenUsage);
+
+        return result.tokenUsage;
+
+    } catch (error) {
+        console.error(`Error processing agentic code generation for query ${queryId}:`, error);
         throw error;
     }
 }

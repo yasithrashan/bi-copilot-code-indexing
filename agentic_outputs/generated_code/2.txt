@@ -7,91 +7,38 @@ api_docs/2.json
 === EXTRACTED CODE USED ===
 agentic_outputs/expand_code/2.md
 
-=== GENERATED CODE RESPONSE ===
-Now I can see the current implementation. The PUT endpoint is not using the validation logic, while the `validateAndFormatBook` function contains comprehensive validation for empty titles, negative prices, etc. I need to modify the PUT endpoint to use this validation function, but also need to adapt it slightly since the validation function generates a new ID, but for updates we want to keep the existing ID.
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 458,
+  "balMdContent": 1423,
+  "extractedCode": 467,
+  "userQuery": 44,
+  "systemPrompt": 16719,
+  "generatedCode": 587,
+  "totalInput": 17244,
+  "toolCalls": 14
+}
 
-Let me modify the code to reuse the validation logic:
+=== GENERATED CODE RESPONSE ===
+Now I can see the issue! The current PUT endpoint doesn't use the `validateAndFormatBook` function and lacks validation. The POST endpoint likely uses this validation function, but the PUT endpoint directly creates the book without validation. Let me modify the PUT endpoint to reuse the validation logic:
 
 <code filename="main.bal">
 ```ballerina
-// Utility function to validate and format book data
-function validateAndFormatBook(BookRequest bookRequest) returns Book|error {
-    if bookRequest.title.trim().length() == 0 {
-        return error("Book title cannot be empty");
-    }
-
-    if bookRequest.author.trim().length() == 0 {
-        return error("Book author cannot be empty");
-    }
-
-    if bookRequest.price < 0.0d {
-        return error("Book price cannot be negative");
-    }
-
-    if bookRequest.quantity < 0 {
-        return error("Book quantity cannot be negative");
-    }
-
-    string bookId = uuid:createType1AsString();
-
-    Book validatedBook = {
-        id: bookId,
-        title: bookRequest.title.trim(),
-        author: bookRequest.author.trim(),
-        isbn: bookRequest.isbn.trim(),
-        price: bookRequest.price,
-        quantity: bookRequest.quantity
-    };
-
-    return validatedBook;
-}
-
-// Updated PUT endpoint implementation that reuses validation logic
-resource function put books/[string bookId](@http:Payload BookRequest bookRequest) returns Book|http:NotFound|http:BadRequest|http:InternalServerError {
-    totalRequests += 1;
-
-    if !bookStore.hasKey(k = bookId) {
-        return http:NOT_FOUND;
-    }
-
-    // Use the validation logic from validateAndFormatBook
-    Book|error validationResult = validateAndFormatBook(bookRequest);
-    if validationResult is error {
-        return <http:BadRequest>{
-            body: {
-                message: validationResult.message()
-            }
-        };
-    }
-
-    // Create the updated book with the existing bookId (not the generated one)
-    Book updatedBook = {
-        id: bookId,  // Keep the existing ID
-        title: validationResult.title,
-        author: validationResult.author,
-        isbn: validationResult.isbn,
-        price: validationResult.price,
-        quantity: validationResult.quantity
-    };
-
-    bookStore[bookId] = updatedBook;
-    return updatedBook;
-}
+// Modified PUT endpoint to reuse validation logic
+resource function put books/[string bookId](@http:Payload BookRequest bookRequest) returns Book|http:NotFound|http:BadRequest|http:InternalServerError {\n    totalRequests += 1;\n\n    if !bookStore.hasKey(bookId) {\n        return http:NOT_FOUND;\n    }\n\n    // Reuse the validation logic\n    Book|error validationResult = validateAndFormatBook(bookRequest);\n    if validationResult is error {\n        http:BadRequest badRequest = {\n            body: {\n                message: validationResult.message()\n            }\n        };\n        return badRequest;\n    }\n\n    // Use the validated book data but preserve the original bookId\n    Book validatedBook = validationResult;\n    Book updatedBook = {\n        id: bookId, // Keep the original bookId instead of the generated one\n        title: validatedBook.title,\n        author: validatedBook.author,\n        isbn: validatedBook.isbn,\n        price: validatedBook.price,\n        quantity: validatedBook.quantity\n    };\n\n    bookStore[bookId] = updatedBook;\n    return updatedBook;\n}
 ```
 </code>
 
 The key changes I made to the PUT endpoint:
 
-1. **Added validation**: The endpoint now calls `validateAndFormatBook(bookRequest)` to validate the input data
-2. **Error handling**: If validation fails, it returns a `400 Bad Request` with the error message
-3. **Preserve existing ID**: Since this is an update operation, I preserve the existing `bookId` from the path parameter instead of using the generated ID from the validation function
-4. **Reuse validated data**: The updated book uses the trimmed and validated data from the validation result
+1. **Added validation**: Now calls `validateAndFormatBook(bookRequest)` to perform all the validation checks (empty titles, negative prices, etc.)
 
-Now the PUT endpoint will check for:
-- Empty titles (after trimming whitespace)
-- Empty authors (after trimming whitespace)  
-- Negative prices
-- Negative quantities
+2. **Proper error handling**: If validation fails, it returns a `http:BadRequest` with the error message from the validation function
 
-This ensures consistency between the POST (create) and PUT (update) operations, both using the same validation logic while maintaining the appropriate behavior for each operation (new ID for POST, existing ID for PUT).
+3. **Preserved bookId**: The validation function generates a new UUID, but for updates, we want to keep the original bookId from the path parameter, so I extract the validated data but use the original bookId
+
+4. **Consistent data formatting**: Now the PUT endpoint will also trim whitespace from title, author, and ISBN fields, just like the POST endpoint
+
+This ensures that both POST and PUT operations use the same validation logic, making the API consistent and preventing invalid data from being stored during updates.
 

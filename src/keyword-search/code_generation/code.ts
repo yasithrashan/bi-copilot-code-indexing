@@ -1,6 +1,7 @@
 import { generateText, stepCountIs } from "ai";
 import { ANTHROPIC_SONNET_4, getAnthropicClinet } from "./connection";
 import { anthropic } from "@ai-sdk/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
 import * as path from "path";
 import type { Library } from "../../libs/types";
@@ -12,8 +13,38 @@ interface UserQuery {
     query: string;
 }
 
+// Add interface for token usage
+interface TokenUsage {
+    langLibs: number;
+    apiDocs: number;
+    expandedCode: number;
+    userQuery: number;
+    systemPrompt: number;
+    generatedCode: number;
+    totalInput: number;
+}
+
+// Initialize Anthropic client for token counting
+const anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
 // Get the langlibs (same for all queries)
 const LANG_LIB = LANGLIBS as Library[];
+
+// Function to count tokens using official Anthropic API
+async function countTokens(text: string): Promise<number> {
+    try {
+        const response = await anthropicClient.messages.countTokens({
+            model: "claude-3-5-sonnet-20241022",
+            messages: [{ role: "user", content: text }]
+        });
+        return response.input_tokens;
+    } catch (error) {
+        console.error("Error counting tokens:", error);
+        return -1;
+    }
+}
 
 // Function to load API docs for a specific query
 function loadApiDocsForQuery(queryId: number): Library {
@@ -42,17 +73,37 @@ function loadExpandedCodeForQuery(queryId: number): string {
     }
 }
 
-// Generate Ballerina code function
-async function generateBallerinaCode(
+// Updated Generate Ballerina code function with token tracking
+async function generateBallerinaCodeWithTokens(
     userQuery: string,
     API_DOC: Library,
     expandedCode: string
-): Promise<string> {
+): Promise<{ code: string; tokenUsage: TokenUsage }> {
     const systemPromptPrefix = getSystemPromptPrefix([API_DOC], expandedCode);
     const systemPromptSuffix = getSystemPromptSuffix(LANG_LIB);
     const systemPrompt = systemPromptPrefix + "\n\n" + systemPromptSuffix;
 
+    console.log("Counting tokens for each component...");
+
+    // Count tokens for each component
+    const [
+        langLibsTokens,
+        apiDocsTokens,
+        expandedCodeTokens,
+        userQueryTokens,
+        systemPromptTokens
+    ] = await Promise.all([
+        countTokens(JSON.stringify(LANG_LIB)),
+        countTokens(JSON.stringify(API_DOC)),
+        countTokens(expandedCode),
+        countTokens(userQuery),
+        countTokens(systemPrompt)
+    ]);
+
+    const totalInputTokens = systemPromptTokens + userQueryTokens;
+
     console.log("Generating Code...");
+    console.log(`Token usage - LangLibs: ${langLibsTokens}, API Docs: ${apiDocsTokens}, Expanded Code: ${expandedCodeTokens}, User Query: ${userQueryTokens}, System Prompt: ${systemPromptTokens}, Total Input: ${totalInputTokens}`);
 
     const result = await generateText({
         model: anthropic(getAnthropicClinet(ANTHROPIC_SONNET_4)),
@@ -64,7 +115,23 @@ async function generateBallerinaCode(
         maxOutputTokens: 8192,
     });
 
-    return result.text;
+    // Count tokens in generated code
+    const generatedCodeTokens = await countTokens(result.text);
+
+    const tokenUsage: TokenUsage = {
+        langLibs: langLibsTokens,
+        apiDocs: apiDocsTokens,
+        expandedCode: expandedCodeTokens,
+        userQuery: userQueryTokens,
+        systemPrompt: systemPromptTokens,
+        generatedCode: generatedCodeTokens,
+        totalInput: totalInputTokens
+    };
+
+    return {
+        code: result.text,
+        tokenUsage
+    };
 }
 
 // Updated helper function to include expanded code context
@@ -176,6 +243,20 @@ Example Codeblock segment:
 `;
 }
 
+// Function to save token usage statistics
+function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): void {
+    const outputDir = path.join(process.cwd(), "keyword_search_outputs/token_usage");
+
+    // Create output directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputPath = path.join(outputDir, `${queryId}.json`);
+    fs.writeFileSync(outputPath, JSON.stringify(tokenUsage, null, 2), "utf-8");
+    console.log(`Token usage saved to: ${outputPath}`);
+}
+
 // Function to save generated code to file
 function saveGeneratedCode(queryId: number, generatedCode: string): void {
     const outputDir = path.join(process.cwd(), "keyword_search_outputs/generated_code");
@@ -190,9 +271,9 @@ function saveGeneratedCode(queryId: number, generatedCode: string): void {
     console.log(`Generated code saved to: ${outputPath}`);
 }
 
-// Modified function to accept queries as parameter instead of reading from file
+// Updated function to process queries with token tracking
 export async function processAllQueries(userQueries: UserQuery[]): Promise<void> {
-    console.log('Generating the code...')
+    console.log('Generating the code with token tracking...')
     try {
         console.log(`Processing ${userQueries.length} user queries...`);
 
@@ -213,17 +294,21 @@ export async function processAllQueries(userQueries: UserQuery[]): Promise<void>
                 const expandedCode = loadExpandedCodeForQuery(currentQuery.id);
                 console.log(`Loaded expanded code for query ${currentQuery.id}`);
 
-                // Generate Ballerina code
-                const generatedCode = await generateBallerinaCode(
+                // Generate Ballerina code with token tracking
+                const result = await generateBallerinaCodeWithTokens(
                     currentQuery.query,
                     apiDocs,
                     expandedCode
                 );
 
                 // Save generated code
-                saveGeneratedCode(currentQuery.id, generatedCode);
+                saveGeneratedCode(currentQuery.id, result.code);
+
+                // Save token usage
+                saveTokenUsage(currentQuery.id, result.tokenUsage);
 
                 console.log(`Successfully processed query ${currentQuery.id}`);
+                console.log(`Token usage:`, result.tokenUsage);
 
             } catch (error) {
                 console.error(`Error processing query ${currentQuery.id}:`, error);
@@ -235,6 +320,46 @@ export async function processAllQueries(userQueries: UserQuery[]): Promise<void>
 
     } catch (error) {
         console.error("Error processing queries:", error);
+        throw error;
+    }
+}
+
+// Export individual function for single query processing (similar to your previous code)
+export async function processCodeGenerationForQuery(
+    queryId: number,
+    queryText: string
+): Promise<TokenUsage> {
+    try {
+        console.log(`Processing code generation for query ${queryId}: ${queryText}`);
+
+        // Load API docs for this query
+        const apiDocs = loadApiDocsForQuery(queryId);
+        console.log(`Loaded API docs for query ${queryId}`);
+
+        // Load expanded code for this query
+        const expandedCode = loadExpandedCodeForQuery(queryId);
+        console.log(`Loaded expanded code for query ${queryId}`);
+
+        // Generate Ballerina code with token tracking
+        const result = await generateBallerinaCodeWithTokens(
+            queryText,
+            apiDocs,
+            expandedCode
+        );
+
+        // Save generated code
+        saveGeneratedCode(queryId, result.code);
+
+        // Save token usage
+        saveTokenUsage(queryId, result.tokenUsage);
+
+        console.log(`Successfully processed code generation for query ${queryId}`);
+        console.log(`Token usage:`, result.tokenUsage);
+
+        return result.tokenUsage;
+
+    } catch (error) {
+        console.error(`Error processing code generation for query ${queryId}:`, error);
         throw error;
     }
 }

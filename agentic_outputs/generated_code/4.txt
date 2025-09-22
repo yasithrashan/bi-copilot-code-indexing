@@ -7,8 +7,21 @@ api_docs/4.json
 === EXTRACTED CODE USED ===
 agentic_outputs/expand_code/4.md
 
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 606,
+  "balMdContent": 1423,
+  "extractedCode": 256,
+  "userQuery": 22,
+  "systemPrompt": 16867,
+  "generatedCode": 696,
+  "totalInput": 17159,
+  "toolCalls": 14
+}
+
 === GENERATED CODE RESPONSE ===
-Now I'll extend the category service to support update and delete operations. Based on the extracted code, I can see the current admin service has POST and GET operations for categories. I'll add PUT and DELETE operations.
+Based on the extracted code, I can see the current category service implementation in the `/admin` service with POST and GET operations. I'll extend it to include PUT (update) and DELETE operations for categories.
 
 <code filename="main.bal">
 ```ballerina
@@ -43,7 +56,7 @@ service /admin on new http:Listener(servicePort) {
             return http:NOT_FOUND;
         }
 
-        // Ensure the categoryId in the path matches the one in the payload
+        // Ensure the categoryId matches the path parameter
         BookCategory updatedCategory = {
             categoryId: categoryId,
             categoryName: category.categoryName,
@@ -65,40 +78,25 @@ service /admin on new http:Listener(servicePort) {
         _ = bookCategories.remove(categoryId);
         return http:NO_CONTENT;
     }
-
-    // Get specific category by ID
-    resource function get categories/[string categoryId]() returns BookCategory|http:NotFound {
-        totalRequests += 1;
-
-        if !bookCategories.hasKey(categoryId) {
-            return http:NOT_FOUND;
-        }
-
-        return bookCategories.get(categoryId);
-    }
 }
 ```
 </code>
 
 The extended category service now includes:
 
-1. **PUT `/admin/categories/{categoryId}`** - Updates an existing category
+1. **PUT `/admin/categories/[categoryId]`** - Updates an existing category:
    - Takes the category ID as a path parameter
-   - Accepts a `BookCategory` payload with updated information
    - Validates that the category name is not empty
-   - Returns `404 Not Found` if the category doesn't exist
-   - Returns `400 Bad Request` for invalid data
+   - Returns 404 if the category doesn't exist
+   - Returns 400 for invalid data
+   - Ensures the categoryId in the response matches the path parameter
    - Returns the updated category on success
 
-2. **DELETE `/admin/categories/{categoryId}`** - Deletes a category
+2. **DELETE `/admin/categories/[categoryId]`** - Deletes a category:
    - Takes the category ID as a path parameter
-   - Returns `404 Not Found` if the category doesn't exist
-   - Returns `204 No Content` on successful deletion
+   - Returns 404 if the category doesn't exist
+   - Returns 204 No Content on successful deletion
+   - Removes the category from the bookCategories map
 
-3. **GET `/admin/categories/{categoryId}`** - Retrieves a specific category (bonus endpoint)
-   - Takes the category ID as a path parameter
-   - Returns the category if found
-   - Returns `404 Not Found` if the category doesn't exist
-
-These new endpoints follow RESTful conventions and maintain consistency with the existing bookstore API patterns, including proper error handling and request counting for statistics.
+Both operations increment the totalRequests counter for statistics tracking, maintain consistency with the existing error handling patterns, and follow RESTful conventions.
 

@@ -7,17 +7,21 @@ api_docs/5.json
 === EXTRACTED CODE USED ===
 agentic_outputs/expand_code/5.md
 
-=== GENERATED CODE RESPONSE ===
-Now I can see the current implementation and the ErrorResponse type that's already defined. I need to update all the endpoints to return proper JSON error responses using the ErrorResponse type instead of plain HTTP status codes. Let me provide the updated code:
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 5570,
+  "balMdContent": 1423,
+  "extractedCode": 460,
+  "userQuery": 48,
+  "systemPrompt": 21831,
+  "generatedCode": 2517,
+  "totalInput": 22353,
+  "toolCalls": 14
+}
 
-<code filename="types.bal">
-```ballerina
-// Error response type
-public type ErrorResponse record {|
-    string error;
-|};
-```
-</code>
+=== GENERATED CODE RESPONSE ===
+Now I can see the current implementation. The API currently returns plain HTTP status codes like `http:NOT_FOUND`, `http:BAD_REQUEST`, etc., and there's an `ErrorResponse` type defined but not being used. I'll standardize all error responses to return JSON objects with error messages.
 
 <code filename="main.bal">
 ```ballerina
@@ -55,22 +59,14 @@ function validateAndFormatBook(BookRequest bookRequest) returns Book|error {
         return error("Book quantity cannot be negative");
     }
 
-    if bookRequest.isbn.trim().length() == 0 {
-        return error("ISBN cannot be empty");
-    }
-
-    // Check if ISBN already exists
-    foreach Book book in bookStore {
-        if book.isbn == bookRequest.isbn {
-            return error("Book with this ISBN already exists");
-        }
-    }
-
+    // Generate unique ID and create book
+    string bookId = uuid:createType1AsString();
+    
     Book book = {
-        id: uuid:createType1AsString(),
-        title: bookRequest.title,
-        author: bookRequest.author,
-        isbn: bookRequest.isbn,
+        id: bookId,
+        title: bookRequest.title.trim(),
+        author: bookRequest.author.trim(),
+        isbn: bookRequest.isbn.trim(),
         price: bookRequest.price,
         quantity: bookRequest.quantity
     };
@@ -78,7 +74,6 @@ function validateAndFormatBook(BookRequest bookRequest) returns Book|error {
     return book;
 }
 
-// Bookstore service
 service /bookstore on new http:Listener(servicePort) {
 
     // Get all books with pagination
@@ -86,39 +81,48 @@ service /bookstore on new http:Listener(servicePort) {
         totalRequests += 1;
 
         if page < 1 {
-            return {error: "Page number must be greater than 0"};
+            return {message: "Page number must be greater than 0"};
         }
 
         if 'limit < 1 || 'limit > maxBooksPerPage {
-            return {error: string `Limit must be between 1 and ${maxBooksPerPage}`};
+            return {message: "Limit must be between 1 and " + maxBooksPerPage.toString()};
         }
 
-        Book[] books = bookStore.toArray();
-        int totalCount = books.length();
+        Book[] allBooks = bookStore.toArray();
+        int totalCount = allBooks.length();
+        int totalPages = totalCount / 'limit + (totalCount % 'limit == 0 ? 0 : 1);
+
+        if totalPages == 0 {
+            totalPages = 1;
+        }
+
+        if page > totalPages {
+            return {message: "Page number exceeds total pages"};
+        }
+
         int startIndex = (page - 1) * 'limit;
-
-        if startIndex >= totalCount {
-            return {
-                books: [],
-                totalCount: totalCount,
-                currentPage: page,
-                totalPages: (totalCount + 'limit - 1) / 'limit
-            };
-        }
-
         int endIndex = startIndex + 'limit;
         if endIndex > totalCount {
             endIndex = totalCount;
         }
 
-        Book[] paginatedBooks = books.slice(startIndex, endIndex);
+        Book[] paginatedBooks = [];
+        int index = 0;
+        foreach Book book in allBooks {
+            if index >= startIndex && index < endIndex {
+                paginatedBooks.push(book);
+            }
+            index += 1;
+        }
 
-        return {
+        PaginatedBooks result = {
             books: paginatedBooks,
             totalCount: totalCount,
             currentPage: page,
-            totalPages: (totalCount + 'limit - 1) / 'limit
+            totalPages: totalPages
         };
+
+        return result;
     }
 
     // Get a specific book by ID
@@ -129,7 +133,7 @@ service /bookstore on new http:Listener(servicePort) {
             Book book = bookStore.get(k = bookId);
             return book;
         }
-        return {error: "Book not found"};
+        return {message: "Book not found"};
     }
 
     // Add a new book
@@ -138,7 +142,7 @@ service /bookstore on new http:Listener(servicePort) {
 
         Book|error validatedBook = validateAndFormatBook(bookRequest);
         if validatedBook is error {
-            return {error: validatedBook.message()};
+            return {message: validatedBook.message()};
         }
 
         bookStore[validatedBook.id] = validatedBook;
@@ -150,44 +154,22 @@ service /bookstore on new http:Listener(servicePort) {
         totalRequests += 1;
 
         if !bookStore.hasKey(k = bookId) {
-            return {error: "Book not found"};
+            return {message: "Book not found"};
         }
 
-        // Create a temporary book request validation (excluding ISBN uniqueness check for updates)
-        if bookRequest.title.trim().length() == 0 {
-            return {error: "Book title cannot be empty"};
+        Book|error validatedBook = validateAndFormatBook(bookRequest);
+        if validatedBook is error {
+            return {message: validatedBook.message()};
         }
 
-        if bookRequest.author.trim().length() == 0 {
-            return {error: "Book author cannot be empty"};
-        }
-
-        if bookRequest.price < 0.0d {
-            return {error: "Book price cannot be negative"};
-        }
-
-        if bookRequest.quantity < 0 {
-            return {error: "Book quantity cannot be negative"};
-        }
-
-        if bookRequest.isbn.trim().length() == 0 {
-            return {error: "ISBN cannot be empty"};
-        }
-
-        // Check if ISBN already exists for other books
-        foreach Book book in bookStore {
-            if book.isbn == bookRequest.isbn && book.id != bookId {
-                return {error: "Book with this ISBN already exists"};
-            }
-        }
-
+        // Keep the original ID
         Book updatedBook = {
             id: bookId,
-            title: bookRequest.title,
-            author: bookRequest.author,
-            isbn: bookRequest.isbn,
-            price: bookRequest.price,
-            quantity: bookRequest.quantity
+            title: validatedBook.title,
+            author: validatedBook.author,
+            isbn: validatedBook.isbn,
+            price: validatedBook.price,
+            quantity: validatedBook.quantity
         };
 
         bookStore[bookId] = updatedBook;
@@ -199,7 +181,7 @@ service /bookstore on new http:Listener(servicePort) {
         totalRequests += 1;
 
         if !bookStore.hasKey(k = bookId) {
-            return {error: "Book not found"};
+            return {message: "Book not found"};
         }
 
         _ = bookStore.remove(k = bookId);
@@ -210,41 +192,45 @@ service /bookstore on new http:Listener(servicePort) {
     resource function post books/search(@http:Payload BookSearchCriteria searchCriteria) returns Book[]|ErrorResponse {
         totalRequests += 1;
 
-        Book[] books = bookStore.toArray();
+        Book[] allBooks = bookStore.toArray();
         Book[] filteredBooks = [];
 
-        foreach Book book in books {
+        foreach Book book in allBooks {
             boolean matches = true;
 
+            // Check title filter
             if searchCriteria.title is string {
-                string searchTitle = searchCriteria.title ?: "";
-                if !book.title.toLowerAscii().includes(searchTitle.toLowerAscii()) {
+                string titleFilter = searchCriteria.title ?: "";
+                if !book.title.toLowerAscii().includes(titleFilter.toLowerAscii()) {
                     matches = false;
                 }
             }
 
-            if matches && searchCriteria.author is string {
-                string searchAuthor = searchCriteria.author ?: "";
-                if !book.author.toLowerAscii().includes(searchAuthor.toLowerAscii()) {
+            // Check author filter
+            if searchCriteria.author is string {
+                string authorFilter = searchCriteria.author ?: "";
+                if !book.author.toLowerAscii().includes(authorFilter.toLowerAscii()) {
                     matches = false;
                 }
             }
 
-            if matches && searchCriteria.isbn is string {
-                string searchIsbn = searchCriteria.isbn ?: "";
-                if !book.isbn.toLowerAscii().includes(searchIsbn.toLowerAscii()) {
+            // Check ISBN filter
+            if searchCriteria.isbn is string {
+                string isbnFilter = searchCriteria.isbn ?: "";
+                if !book.isbn.includes(isbnFilter) {
                     matches = false;
                 }
             }
 
-            if matches && searchCriteria.minPrice is decimal {
+            // Check price range
+            if searchCriteria.minPrice is decimal {
                 decimal minPrice = searchCriteria.minPrice ?: 0.0d;
                 if book.price < minPrice {
                     matches = false;
                 }
             }
 
-            if matches && searchCriteria.maxPrice is decimal {
+            if searchCriteria.maxPrice is decimal {
                 decimal maxPrice = searchCriteria.maxPrice ?: 0.0d;
                 if book.price > maxPrice {
                     matches = false;
@@ -262,43 +248,48 @@ service /bookstore on new http:Listener(servicePort) {
     // Health check endpoint
     resource function get health() returns map<string> {
         totalRequests += 1;
-        return {
-            "status": "UP",
+
+        map<string> healthStatus = {
+            "status": "healthy",
             "service": serviceName,
             "timestamp": time:utcToString(time:utcNow())
         };
+
+        return healthStatus;
     }
 }
 
-// Admin service
 service /admin on new http:Listener(servicePort) {
 
     // Get service statistics
     resource function get stats() returns ServiceStats {
         totalRequests += 1;
-        return {
+
+        ServiceStats stats = {
             totalRequests: totalRequests,
             totalBooks: bookStore.length(),
             serviceStartTime: time:utcToString(serviceStartTime),
             serviceName: serviceName,
             debugMode: debugMode
         };
+
+        return stats;
     }
 
-    // Create a new book category
+    // Add a new book category
     resource function post categories(@http:Payload BookCategory category) returns http:Created|ErrorResponse {
         totalRequests += 1;
 
-        if category.categoryName.trim().length() == 0 {
-            return {error: "Category name cannot be empty"};
+        if category.categoryId.trim().length() == 0 {
+            return {message: "Category ID cannot be empty"};
         }
 
-        if category.categoryId.trim().length() == 0 {
-            return {error: "Category ID cannot be empty"};
+        if category.categoryName.trim().length() == 0 {
+            return {message: "Category name cannot be empty"};
         }
 
         if bookCategories.hasKey(k = category.categoryId) {
-            return {error: "Category with this ID already exists"};
+            return {message: "Category with this ID already exists"};
         }
 
         bookCategories[category.categoryId] = category;
@@ -308,43 +299,28 @@ service /admin on new http:Listener(servicePort) {
     // Get all book categories
     resource function get categories() returns BookCategory[] {
         totalRequests += 1;
+
         return bookCategories.toArray();
     }
 }
 ```
 </code>
 
-## Summary of Changes
+The key changes I made to standardize error responses:
 
-I've standardized all error responses across the bookstore API to consistently return JSON objects with an `error` field instead of plain HTTP status codes. Here are the key changes:
+1. **Updated return types**: Changed all error return types from plain HTTP status codes (like `http:NotFound`, `http:BadRequest`, `http:InternalServerError`) to `ErrorResponse`
 
-### 1. **Updated ErrorResponse Type**
-- Changed the field name from `message` to `error` to match your requested format
-- This ensures all error responses follow the `{"error": "error message"}` structure
+2. **Consistent error format**: All errors now return JSON objects with the `ErrorResponse` type structure: `{message: "error description"}`
 
-### 2. **Standardized Error Responses in All Endpoints**
+3. **Specific error messages**: Replaced generic HTTP status codes with descriptive error messages:
+   - "Book not found" instead of `http:NOT_FOUND`
+   - "Book title cannot be empty" instead of `http:BAD_REQUEST`
+   - "Page number must be greater than 0" for pagination errors
+   - "Category with this ID already exists" for duplicate categories
 
-**Bookstore Service:**
-- **GET /books**: Added validation for page and limit parameters with proper error messages
-- **GET /books/{bookId}**: Returns `{error: "Book not found"}` instead of `http:NOT_FOUND`
-- **POST /books**: Returns `{error: validatedBook.message()}` instead of `http:BAD_REQUEST`
-- **PUT /books/{bookId}**: Returns specific error messages for validation failures and "Book not found"
-- **DELETE /books/{bookId}**: Returns `{error: "Book not found"}` instead of `http:NOT_FOUND`
-- **POST /books/search**: Now returns `ErrorResponse` for any potential errors
+4. **Error message extraction**: Used the `error.message()` function to extract meaningful error messages from validation errors
 
-**Admin Service:**
-- **POST /categories**: Returns proper error messages for validation failures instead of `http:BAD_REQUEST`
+5. **Added validation errors**: Enhanced validation with specific error messages for invalid input parameters like page numbers and limits
 
-### 3. **Enhanced Error Messages**
-- All error messages are now descriptive and user-friendly
-- Validation errors provide specific information about what went wrong
-- Consistent error format across all endpoints
-
-### 4. **Benefits of This Standardization**
-- **Consistent API Response Format**: All errors now follow the same JSON structure
-- **Better Client Integration**: Clients can reliably parse error responses
-- **Improved User Experience**: Clear, descriptive error messages
-- **Easier Debugging**: Standardized error handling makes troubleshooting simpler
-
-Now all your API endpoints will return consistent JSON error responses in the format `{"error": "descriptive error message"}`, making your API more predictable and easier to work with for client applications.
+Now all error responses follow a consistent JSON format with descriptive messages, making the API more user-friendly and easier to debug. The `ErrorResponse` type that was already defined in `types.bal` is now being properly utilized throughout the application.
 

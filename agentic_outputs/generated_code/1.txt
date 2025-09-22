@@ -7,8 +7,21 @@ api_docs/1.json
 === EXTRACTED CODE USED ===
 agentic_outputs/expand_code/1.md
 
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 309,
+  "balMdContent": 1423,
+  "extractedCode": 411,
+  "userQuery": 41,
+  "systemPrompt": 16570,
+  "generatedCode": 662,
+  "totalInput": 17036,
+  "toolCalls": 14
+}
+
 === GENERATED CODE RESPONSE ===
-Now I can see the current pagination implementation. I need to add validation for the 'page' and 'limit' parameters to ensure they are greater than zero, and return a 400 Bad Request if they are not valid.
+Now I can see the current pagination implementation. The GET `/books` endpoint currently accepts `page` and `limit` parameters but doesn't validate them. I'll update the code to add validation that returns a 400 Bad Request if either parameter is less than or equal to zero.
 
 <code filename="main.bal">
 ```ballerina
@@ -18,12 +31,10 @@ resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns 
 
     // Validate pagination parameters
     if page <= 0 || 'limit <= 0 {
-        http:BadRequest badRequest = {
-            body: {
-                message: "Page and limit parameters must be greater than zero"
-            }
+        ErrorResponse errorResponse = {
+            message: "Page and limit parameters must be greater than zero"
         };
-        return badRequest;
+        return <http:BadRequest>{ body: errorResponse };
     }
 
     Book[] allBooks = bookStore.toArray();
@@ -64,29 +75,15 @@ resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns 
 ```
 </code>
 
-The changes I made to update the pagination logic:
+The key changes I made:
 
-1. **Updated Return Type**: Changed the return type from `PaginatedBooks|http:InternalServerError` to `PaginatedBooks|http:BadRequest|http:InternalServerError` to include the possibility of returning a 400 Bad Request.
+1. **Updated return type**: Added `http:BadRequest` to the return type union to indicate the endpoint can now return a 400 status code
+2. **Added validation logic**: Added a check at the beginning of the function that validates both `page` and `limit` parameters are greater than zero
+3. **Return BadRequest response**: When validation fails, the function returns an `http:BadRequest` response with an `ErrorResponse` body containing a descriptive error message
 
-2. **Added Parameter Validation**: Added a validation check at the beginning of the function that verifies both `page` and `'limit` parameters are greater than zero:
-   ```ballerina
-   if page <= 0 || 'limit <= 0 {
-       http:BadRequest badRequest = {
-           body: {
-               message: "Page and limit parameters must be greater than zero"
-           }
-       };
-       return badRequest;
-   }
-   ```
+This validation ensures that:
+- `page` must be greater than 0 (page numbers start from 1)
+- `limit` must be greater than 0 (cannot request 0 or negative number of items per page)
 
-3. **Error Response**: When validation fails, the function now returns a 400 Bad Request with a descriptive error message explaining that both page and limit parameters must be greater than zero.
-
-This enhancement ensures that:
-- Users cannot request invalid page numbers (≤ 0)
-- Users cannot request invalid limit values (≤ 0) 
-- The API returns a proper HTTP 400 status code with a clear error message when invalid parameters are provided
-- The existing pagination logic remains unchanged for valid parameters
-
-The validation happens early in the function, before any processing occurs, making it efficient and preventing potential division by zero or other edge cases that could occur with invalid pagination parameters.
+The error response follows the existing `ErrorResponse` type structure defined in your types.bal file, maintaining consistency with your API's error handling pattern.
 

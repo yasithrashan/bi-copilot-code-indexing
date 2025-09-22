@@ -1,9 +1,9 @@
 # Bookstore API Project
-## A RESTful API service for managing a bookstore inventory system with admin capabilities
+## A RESTful API service for managing a bookstore with book management, search, and administrative capabilities
 
 ## Project Files
-- `main.bal` - Main service implementation with bookstore and admin endpoints
-- `types.bal` - Type definitions for the domain models and API responses
+- `main.bal` - Main service implementation with HTTP endpoints for book management and admin functions
+- `types.bal` - Type definitions for the API including Book, BookRequest, and other data structures
 
 ---
 
@@ -36,7 +36,7 @@
 * **Comments**: Utility function to validate and format book data
 * **Parameters**:
     * **Input Parameter**:
-        * `bookRequest` - [BookRequest] - None
+        * `bookRequest` - [BookRequest]
 * **Returns**: `Book|error`
 
 ---
@@ -44,8 +44,6 @@
 ### Services
 
 HTTP Service: `/bookstore` on port `servicePort 8080`
-
----
 
 ### Endpoints
 
@@ -59,9 +57,9 @@ HTTP Service: `/bookstore` on port `servicePort 8080`
 * **Returns**: `PaginatedBooks|http:InternalServerError`
 * **Status Codes**:
     - `200 OK` - Successfully retrieved books
-    - `500 Internal Server Error` - Server error
+    - `500 Internal Server Error` - Server error occurred
 
-#### `/bookstore/books/{bookId}`
+#### `/bookstore/books/[string bookId]`
 
 * **GET**
 * **Parameters**:
@@ -69,9 +67,9 @@ HTTP Service: `/bookstore` on port `servicePort 8080`
         * `bookId` - [string]
 * **Returns**: `Book|http:NotFound|http:InternalServerError`
 * **Status Codes**:
-    - `200 OK` - Book found
+    - `200 OK` - Book found and returned
     - `404 Not Found` - Book not found
-    - `500 Internal Server Error` - Server error
+    - `500 Internal Server Error` - Server error occurred
 
 * **POST /bookstore/books**
 * **Parameters**:
@@ -79,67 +77,46 @@ HTTP Service: `/bookstore` on port `servicePort 8080`
         * `bookRequest` - [BookRequest]
 * **Returns**: `http:Created|http:BadRequest|http:InternalServerError`
 * **Status Codes**:
-    - `201 Created` - Book created successfully
+    - `201 Created` - Book successfully created
     - `400 Bad Request` - Invalid book data
-    - `500 Internal Server Error` - Server error
+    - `500 Internal Server Error` - Server error occurred
 
-* **PUT /bookstore/books/{bookId}**
+* **PUT /bookstore/books/[string bookId]**
 * **Parameters**:
     * **Path Parameter**:
         * `bookId` - [string]
     * **Body Parameter**:
         * `bookRequest` - [BookRequest]
 * **Returns**: `Book|http:NotFound|http:BadRequest|http:InternalServerError`
-* **Status Codes**:
-    - `200 OK` - Book updated successfully
-    - `404 Not Found` - Book not found
-    - `400 Bad Request` - Invalid book data
-    - `500 Internal Server Error` - Server error
 
-* **DELETE /bookstore/books/{bookId}**
+* **DELETE /bookstore/books/[string bookId]**
 * **Parameters**:
     * **Path Parameter**:
         * `bookId` - [string]
 * **Returns**: `http:NoContent|http:NotFound|http:InternalServerError`
-* **Status Codes**:
-    - `204 No Content` - Book deleted successfully
-    - `404 Not Found` - Book not found
-    - `500 Internal Server Error` - Server error
 
 * **POST /bookstore/books/search**
 * **Parameters**:
     * **Body Parameter**:
         * `searchCriteria` - [BookSearchCriteria]
 * **Returns**: `Book[]|http:InternalServerError`
-* **Status Codes**:
-    - `200 OK` - Search results returned
-    - `500 Internal Server Error` - Server error
 
 * **GET /bookstore/health**
 * **Returns**: `map<string>`
-* **Status Codes**:
-    - `200 OK` - Health status returned
 
 HTTP Service: `/admin` on port `servicePort 8080`
 
 * **GET /admin/stats**
 * **Returns**: `ServiceStats`
-* **Status Codes**:
-    - `200 OK` - Statistics returned
 
 * **POST /admin/categories**
 * **Parameters**:
     * **Body Parameter**:
         * `category` - [BookCategory]
 * **Returns**: `http:Created|http:BadRequest`
-* **Status Codes**:
-    - `201 Created` - Category created successfully
-    - `400 Bad Request` - Invalid category data
 
 * **GET /admin/categories**
 * **Returns**: `BookCategory[]`
-* **Status Codes**:
-    - `200 OK` - Categories returned
 
 ---
 
@@ -147,8 +124,6 @@ HTTP Service: `/admin` on port `servicePort 8080`
 
 ### Imports
 None
-
----
 
 ### Type Definitions
 
