@@ -5,7 +5,6 @@ import { BallerinaChunker } from "./chunker";
 import { createQdrantClient, createCollection, upsertChunks, searchRelevantChunks } from "./qdrant";
 import { chunkUserQuery } from "./queries";
 import fs from 'fs/promises';
-import { saveRelevantChunksToExcel } from "../excel";
 import { expandCode } from "./code-generation/code_expand";
 import path from "path";
 import { processCodeGenerationForQuery } from "./code-generation/code";
@@ -124,9 +123,5 @@ export async function ragPipeline(
             allRelevantChunks.push([]);
         }
     }
-
-    // Save in the excel file after collecting all relevant chunks
-    await saveRelevantChunksToExcel(userQueries, allRelevantChunks);
-
     console.log("RAG pipeline completed!");
 }
