@@ -2,312 +2,195 @@
   "query": "Standardize the error responses so they always return a JSON object with an error message (e.g., { \\\"error\\\": \\\"Book not found\\\" }) instead of just plain HTTP status codes.",
   "relevant_chunks": [
     {
-      "score": 0.6633076,
+      "score": 0.663215697,
       "payload": {
         "content": "function validateAndFormatBook(BookRequest bookRequest) returns Book|error {\n    if bookRequest.title.trim().length() == 0 {\n        return error(\"Book title cannot be empty\");\n    }\n\n    if bookRequest.author.trim().length() == 0 {\n        return error(\"Book author cannot be empty\");\n    }\n\n    if bookRequest.price < 0.0d {\n        return error(\"Book price cannot be negative\");\n    }\n\n    if bookRequest.quantity < 0 {\n        return error(\"Book quantity cannot be negative\");\n    }\n\n    string bookId = uuid:createType1AsString();\n\n    Book validatedBook = {\n        id: bookId,\n        title: bookRequest.title.trim(),\n        author: bookRequest.author.trim(),\n        isbn: bookRequest.isbn.trim(),\n        price: bookRequest.price,\n        quantity: bookRequest.quantity\n    };\n\n    return validatedBook;\n}",
-        "metadata": {
-          "type": "function",
-          "name": "validateAndFormatBook",
-          "originalName": "validateAndFormatBook",
-          "modifiers": [],
-          "parameters": [
-            "BookRequest bookRequest"
-          ],
-          "returnType": "Book|error",
-          "visibility": "private",
-          "partIndex": 0,
-          "totalParts": 1,
-          "line": 20,
-          "endLine": 20,
-          "position": {
-            "start": {
-              "line": 20,
-              "column": 1
-            },
-            "end": {
-              "line": 20,
-              "column": 77
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:function:validateAndFormatBook",
-          "hash": "aae18c159835d322"
-        },
+        "type": "function",
+        "name": null,
+        "file": "main.bal",
         "line": 20,
         "endLine": 20,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:function:validateAndFormatBook",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:function:validateAndFormatBook",
         "hash": "aae18c159835d322",
-        "textForEmbedding": "function validateAndFormatBook(BookRequest bookRequest) returns Book|error {\n    if bookRequest.title.trim().length() == 0 {\n        return error(\"Book title cannot be empty\");\n    }\n\n    if bookRequest.author.trim().length() == 0 {\n        return error(\"Book author cannot be empty\");\n    }\n\n    if bookRequest.price < 0.0d {\n        return error(\"Book price cannot be negative\");\n    }\n\n    if bookRequest.quantity < 0 {\n        return error(\"Book quantity cannot be negative\");\n    }\n\n    string bookId = uuid:createType1AsString();\n\n    Book validatedBook = {\n        id: bookId,\n        title: bookRequest.title.trim(),\n        author: bookRequest.author.trim(),\n        isbn: bookRequest.isbn.trim(),\n        price: bookRequest.price,\n        quantity: bookRequest.quantity\n    };\n\n    return validatedBook;\n}"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.65753114,
+      "score": 0.657278061,
       "payload": {
         "content": "resource function post books(@http:Payload BookRequest bookRequest) returns http:Created|http:BadRequest|http:InternalServerError {\ntotalRequests += 1;\n\n        Book|error validatedBook = validateAndFormatBook(bookRequest);\n        if validatedBook is error {\n            return http:BAD_REQUEST;\n        }\n\n        bookStore[validatedBook.id] = validatedBook;\n        return http:CREATED;\n}",
-        "metadata": {
-          "type": "resource",
-          "name": "post books",
-          "servicePath": "/bookstore",
-          "serviceListener": "new http:Listener(servicePort)",
-          "httpMethod": "post",
-          "resourcePath": "books",
-          "fullPath": "/bookstore/books",
-          "parameters": [
-            "@http:Payload BookRequest bookRequest"
-          ],
-          "returnType": "http:Created|http:BadRequest|http:InternalServerError",
-          "isComplete": true,
-          "line": 55,
-          "endLine": 59,
-          "position": {
-            "start": {
-              "line": 55,
-              "column": 102
-            },
-            "end": {
-              "line": 59,
-              "column": 31
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:service:bookstore:post:books",
-          "hash": "aa4778bbe0607ed2"
-        },
+        "type": "resource",
+        "name": null,
+        "file": "main.bal",
         "line": 55,
         "endLine": 59,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:service:bookstore:post:books",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:service:bookstore:post:books",
         "hash": "aa4778bbe0607ed2",
-        "textForEmbedding": "resource function post books(@http:Payload BookRequest bookRequest) returns http:Created|http:BadRequest|http:InternalServerError {\ntotalRequests += 1;\n\n        Book|error validatedBook = validateAndFormatBook(bookRequest);\n        if validatedBook is error {\n            return http:BAD_REQUEST;\n        }\n\n        bookStore[validatedBook.id] = validatedBook;\n        return http:CREATED;\n}"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.6547171,
+      "score": 0.654535294,
       "payload": {
         "content": "Book|error validatedBook = validateAndFormatBook(bookRequest);",
-        "metadata": {
-          "type": "module_variable",
-          "name": "error",
-          "visibility": "private",
-          "line": 109,
-          "endLine": 109,
-          "position": {
-            "start": {
-              "line": 109,
-              "column": 1
-            },
-            "end": {
-              "line": 109,
-              "column": 71
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:variable:error",
-          "hash": "eb8dce286ed35bb7"
-        },
+        "type": "module_variable",
+        "name": null,
+        "file": "main.bal",
         "line": 109,
         "endLine": 109,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:variable:error",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:variable:error",
         "hash": "eb8dce286ed35bb7",
-        "textForEmbedding": "Book|error validatedBook = validateAndFormatBook(bookRequest);"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.63185143,
+      "score": 0.631737769,
       "payload": {
         "content": "resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns PaginatedBooks|http:InternalServerError {\ntotalRequests += 1;\n\n        Book[] allBooks = bookStore.toArray();\n        int totalCount = allBooks.length();\n        int startIndex = (page - 1) * 'limit;\n        int endIndex = startIndex + 'limit;\n\n        if startIndex >= totalCount {\n            PaginatedBooks emptyResult = {\n                books: [],\n                totalCount: totalCount,\n                currentPage: page,\n                totalPages: (totalCount + 'limit - 1) / 'limit\n            };\n            return emptyResult;\n        }\n\n        if endIndex > totalCount {\n            endIndex = totalCount;\n        }\n\n        Book[] paginatedBooks = [];\n        int index = startIndex;\n        while index < endIndex {\n            paginatedBooks.push(allBooks[index]);\n            index += 1;\n        }\n\n        PaginatedBooks result = {\n            books: paginatedBooks,\n            totalCount: totalCount,\n            currentPage: page,\n            totalPages: (totalCount + 'limit - 1) / 'limit\n        };\n\n        return result;\n}",
-        "metadata": {
-          "type": "resource",
-          "name": "get books",
-          "servicePath": "/bookstore",
-          "serviceListener": "new http:Listener(servicePort)",
-          "httpMethod": "get",
-          "resourcePath": "books",
-          "fullPath": "/bookstore/books",
-          "parameters": [
-            "int page = 1",
-            "int 'limit = maxBooksPerPage"
-          ],
-          "returnType": "PaginatedBooks|http:InternalServerError",
-          "isComplete": true,
-          "line": 2,
-          "endLine": 7,
-          "position": {
-            "start": {
-              "line": 2,
-              "column": 21
-            },
-            "end": {
-              "line": 7,
-              "column": 32
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:service:bookstore:get:books",
-          "hash": "1a3e29413cc7e999"
-        },
+        "type": "resource",
+        "name": null,
+        "file": "main.bal",
         "line": 2,
         "endLine": 7,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:service:bookstore:get:books",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:service:bookstore:get:books",
         "hash": "1a3e29413cc7e999",
-        "textForEmbedding": "resource function get books(int page = 1, int 'limit = maxBooksPerPage) returns PaginatedBooks|http:InternalServerError {\ntotalRequests += 1;\n\n        Book[] allBooks = bookStore.toArray();\n        int totalCount = allBooks.length();\n        int startIndex = (page - 1) * 'limit;\n        int endIndex = startIndex + 'limit;\n\n        if startIndex >= totalCount {\n            PaginatedBooks emptyResult = {\n                books: [],\n                totalCount: totalCount,\n                currentPage: page,\n                totalPages: (totalCount + 'limit - 1) / 'limit\n            };\n            return emptyResult;\n        }\n\n        if endIndex > totalCount {\n            endIndex = totalCount;\n        }\n\n        Book[] paginatedBooks = [];\n        int index = startIndex;\n        while index < endIndex {\n            paginatedBooks.push(allBooks[index]);\n            index += 1;\n        }\n\n        PaginatedBooks result = {\n            books: paginatedBooks,\n            totalCount: totalCount,\n            currentPage: page,\n            totalPages: (totalCount + 'limit - 1) / 'limit\n        };\n\n        return result;\n}"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.6076623,
+      "score": 0.607886314,
       "payload": {
         "content": "resource function post books/search(@http:Payload BookSearchCriteria searchCriteria) returns Book[]|http:InternalServerError {\ntotalRequests += 1;\n\n        Book[] allBooks = bookStore.toArray();\n        Book[] filteredBooks = [];\n\n        foreach Book book in allBooks {\n            boolean matches = true;\n\n            string? titleCriteria = searchCriteria.title;\n            if titleCriteria is string {\n                if !book.title.toLowerAscii().includes(titleCriteria.toLowerAscii()) {\n                    matches = false;\n                }\n            }\n\n            string? authorCriteria = searchCriteria.author;\n            if authorCriteria is string && matches {\n                if !book.author.toLowerAscii().includes(authorCriteria.toLowerAscii()) {\n                    matches = false;\n                }\n            }\n\n            string? isbnCriteria = searchCriteria.isbn;\n            if isbnCriteria is string && matches {\n                if !book.isbn.includes(isbnCriteria) {\n                    matches = false;\n                }\n            }\n\n            decimal? minPriceCriteria = searchCriteria.minPrice;\n            if minPriceCriteria is decimal && matches {\n                if book.price < minPriceCriteria {\n                    matches = false;\n                }\n            }\n\n            decimal? maxPriceCriteria = searchCriteria.maxPrice;\n            if maxPriceCriteria is decimal && matches {\n                if book.price > maxPriceCriteria {\n                    matches = false;\n                }\n            }\n\n            if matches {\n                filteredBooks.push(book);\n            }\n        }\n\n        return filteredBooks;\n}",
-        "metadata": {
-          "type": "resource",
-          "name": "post books/search",
-          "servicePath": "/bookstore",
-          "serviceListener": "new http:Listener(servicePort)",
-          "httpMethod": "post",
-          "resourcePath": "books/search",
-          "fullPath": "/bookstore/books/search",
-          "parameters": [
-            "@http:Payload BookSearchCriteria searchCriteria"
-          ],
-          "returnType": "Book[]|http:InternalServerError",
-          "isComplete": true,
-          "line": 106,
-          "endLine": 109,
-          "position": {
-            "start": {
-              "line": 106,
-              "column": 44
-            },
-            "end": {
-              "line": 109,
-              "column": 5
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:service:bookstore:post:books/search",
-          "hash": "73abfcfc12a19109"
-        },
+        "type": "resource",
+        "name": null,
+        "file": "main.bal",
         "line": 106,
         "endLine": 109,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:service:bookstore:post:books/search",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:service:bookstore:post:books/search",
         "hash": "73abfcfc12a19109",
-        "textForEmbedding": "resource function post books/search(@http:Payload BookSearchCriteria searchCriteria) returns Book[]|http:InternalServerError {\ntotalRequests += 1;\n\n        Book[] allBooks = bookStore.toArray();\n        Book[] filteredBooks = [];\n\n        foreach Book book in allBooks {\n            boolean matches = true;\n\n            string? titleCriteria = searchCriteria.title;\n            if titleCriteria is string {\n                if !book.title.toLowerAscii().includes(titleCriteria.toLowerAscii()) {\n                    matches = false;\n                }\n            }\n\n            string? authorCriteria = searchCriteria.author;\n            if authorCriteria is string && matches {\n                if !book.author.toLowerAscii().includes(authorCriteria.toLowerAscii()) {\n                    matches = false;\n                }\n            }\n\n            string? isbnCriteria = searchCriteria.isbn;\n            if isbnCriteria is string && matches {\n                if !book.isbn.includes(isbnCriteria) {\n                    matches = false;\n                }\n            }\n\n            decimal? minPriceCriteria = searchCriteria.minPrice;\n            if minPriceCriteria is decimal && matches {\n                if book.price < minPriceCriteria {\n                    matches = false;\n                }\n            }\n\n            decimal? maxPriceCriteria = searchCriteria.maxPrice;\n            if maxPriceCriteria is decimal && matches {\n                if book.price > maxPriceCriteria {\n                    matches = false;\n                }\n            }\n\n            if matches {\n                filteredBooks.push(book);\n            }\n        }\n\n        return filteredBooks;\n}"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.60594034,
+      "score": 0.605742455,
       "payload": {
         "content": "service /bookstore on new http:Listener(servicePort) {",
-        "metadata": {
-          "type": "service",
-          "name": "bookstore",
-          "path": "/bookstore",
-          "listener": "new http:Listener(servicePort)",
-          "line": 52,
-          "endLine": 52,
-          "position": {
-            "start": {
-              "line": 52,
-              "column": 1
-            },
-            "end": {
-              "line": 52,
-              "column": 55
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:service:bookstore:new http:Listener(servicePort)",
-          "hash": "4184e896f87fcb34"
-        },
+        "type": "service",
+        "name": null,
+        "file": "main.bal",
         "line": 52,
         "endLine": 52,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:service:bookstore:new http:Listener(servicePort)",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:service:bookstore:new http:Listener(servicePort)",
         "hash": "4184e896f87fcb34",
-        "textForEmbedding": "service /bookstore on new http:Listener(servicePort) {"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.60489976,
+      "score": 0.604819298,
       "payload": {
         "content": "map<Book> bookStore = {};",
-        "metadata": {
-          "type": "module_variable",
-          "name": "map<Book>",
-          "visibility": "private",
-          "line": 17,
-          "endLine": 17,
-          "position": {
-            "start": {
-              "line": 17,
-              "column": 1
-            },
-            "end": {
-              "line": 17,
-              "column": 26
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:variable:map<Book>",
-          "hash": "bcedfea1b388f9d3"
-        },
+        "type": "module_variable",
+        "name": null,
+        "file": "main.bal",
         "line": 17,
         "endLine": 17,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:variable:map<Book>",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:variable:map<Book>",
         "hash": "bcedfea1b388f9d3",
-        "textForEmbedding": "map<Book> bookStore = {};"
+        "moduleName": "ballerina"
       }
     },
     {
-      "score": 0.60252017,
+      "score": 0.602210104,
       "payload": {
         "content": "configurable int maxBooksPerPage = 10;",
-        "metadata": {
-          "type": "configurable_variable",
-          "name": "maxBooksPerPage",
-          "dataType": "int",
-          "line": 8,
-          "endLine": 8,
-          "position": {
-            "start": {
-              "line": 8,
-              "column": 1
-            },
-            "end": {
-              "line": 8,
-              "column": 39
-            }
-          },
-          "moduleName": "ballerina",
-          "file": "main.bal",
-          "id": "ballerina:main:configurable:maxBooksPerPage",
-          "hash": "82058f20caaff18a"
-        },
+        "type": "configurable_variable",
+        "name": null,
+        "file": "main.bal",
         "line": 8,
         "endLine": 8,
-        "moduleName": "ballerina",
-        "file": "main.bal",
-        "chunkId": "ballerina:main:configurable:maxBooksPerPage",
+        "position": {
+          "start": {
+            "line": 0,
+            "column": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0
+          }
+        },
+        "id": "ballerina:main:configurable:maxBooksPerPage",
         "hash": "82058f20caaff18a",
-        "textForEmbedding": "configurable int maxBooksPerPage = 10;"
+        "moduleName": "ballerina"
       }
     }
   ]

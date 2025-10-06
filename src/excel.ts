@@ -9,7 +9,7 @@ export interface QueryWithId {
 // Extract data from Excel
 export async function dataExtarctFromExcelSheet(): Promise<QueryWithId[]> {
     console.log("Extracting the data from excel sheet");
-    const filePath = '/Users/yasithrashan/Downloads/BI-Copilot-Code-Indexing.xlsx';
+    const filePath = 'excel.xlsx';
 
     const fileBuffer = fs.readFileSync(filePath);
 
@@ -33,7 +33,7 @@ export async function dataExtarctFromExcelSheet(): Promise<QueryWithId[]> {
         query: row["User Query"]
     }));
 
-    // Save the user query and
+    // Save the user query and id
     const dirPath = 'rag_outputs/user_queries'
     fs.mkdirSync(dirPath, { recursive: true })
 

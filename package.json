@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.17",
     "@anthropic-ai/sdk": "^0.63.0",
+    "@pinecone-database/pinecone": "^6.1.2",
     "@qdrant/js-client-rest": "^1.15.1",
     "ai": "^5.0.47",
     "axios": "^1.12.2",

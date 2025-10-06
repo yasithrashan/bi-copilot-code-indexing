@@ -2,7 +2,7 @@ import type { Chunk } from "./types";
 import { loadFiles, readFiles } from "../file_extraction";
 import { getEmbeddings } from "./embeddings";
 import { BallerinaChunker } from "./chunker";
-import { createQdrantClient, createCollection, upsertChunks, searchRelevantChunks } from "./qdrant";
+import { createPineconeClient, createCollection, upsertChunks, searchRelevantChunks } from "./vector_db";
 import { chunkUserQuery } from "./queries";
 import fs from 'fs/promises';
 import { expandCode } from "./code-generation/code_expand";
@@ -12,67 +12,66 @@ import { processCodeGenerationForQuery } from "./code-generation/code";
 export async function ragPipeline(
     ballerinaDir: string,
     voyageApiKey: string,
-    qdrantUrl: string = "http://localhost:6333"
+    pineconeApiKey: string
 ): Promise<void> {
-    const chunker = new BallerinaChunker();
-    const qdrantClient = createQdrantClient(qdrantUrl);
+    console.time("RAG Pipeline Total Time");
 
+    const chunker = new BallerinaChunker();
+    const pineconeClient = createPineconeClient(pineconeApiKey);
+
+    console.time("Loading Files");
     console.log("Loading Ballerina files...");
     const ballerinaFiles = loadFiles(ballerinaDir);
+    console.timeEnd("Loading Files");
 
+    console.time("Chunking Code");
     console.log("Chunking code...");
     let allChunks: Chunk[] = [];
     for (const file of ballerinaFiles) {
         const code = readFiles(file);
         allChunks = allChunks.concat(chunker.chunkBallerinaCode(code, file));
     }
-
     console.log(`Generated ${allChunks.length} chunks`);
-
-    // Save chunks to JSON file in tests folder
     chunker.saveChunksToJson(allChunks, ballerinaDir);
+    console.timeEnd("Chunking Code");
 
-    // Create Qdrant collection
-    await createCollection(qdrantClient);
+    console.time("Creating Pinecone Collection");
+    await createCollection(pineconeClient);
+    console.timeEnd("Creating Pinecone Collection");
 
-    // Prepare texts for embeddings
     const textsForEmbedding = allChunks.map((chunk) => chunk.content);
 
-    // Generate embeddings
+    console.time("Generating Embeddings");
     console.log("Generating embeddings with VoyageAI...");
     const embeddings = await getEmbeddings(textsForEmbedding, voyageApiKey);
+    console.timeEnd("Generating Embeddings");
 
-    // Upserting chunks
-    console.log("Upserting chunks into Qdrant...");
-    await upsertChunks(qdrantClient, allChunks, embeddings, textsForEmbedding);
-
+    console.time("Upserting Chunks");
+    console.log("Upserting chunks into Pinecone...");
+    await upsertChunks(pineconeClient, allChunks, embeddings, textsForEmbedding);
     console.log("All the chunks indexed successfully!");
+    console.timeEnd("Upserting Chunks");
 
-    // Chunk the user query
+    console.time("Processing User Queries");
     const userQueries = await chunkUserQuery();
-
-    // Embedding the user query
     const userQueryTexts = userQueries.map(q => q.query);
     const embededUserQuery = await getEmbeddings(userQueryTexts, voyageApiKey);
-
-    console.log(embededUserQuery.length);
 
     const dirPath = 'rag_outputs/relevant_chunks';
     await fs.mkdir(dirPath, { recursive: true });
 
-    // Return relevant chunks for every user query
     const allRelevantChunks: any[][] = [];
     for (let i = 0; i < userQueries.length; i++) {
         const docId = i + 1;
         const queryEmbedding = embededUserQuery[i];
         const userQuery = userQueries[i];
 
+        console.time(`Query ${docId} Processing Time`);
         if (queryEmbedding && userQuery) {
-            const relevantChunks = await searchRelevantChunks(qdrantClient, queryEmbedding);
+            const relevantChunks = await searchRelevantChunks(pineconeClient, queryEmbedding);
 
             console.log(`\nUser Query: ${userQuery.query}`);
 
-            // Json content
             const dataToSaveJson = {
                 query: userQuery.query,
                 relevant_chunks: relevantChunks.map((chunk) => ({
@@ -81,10 +80,8 @@ export async function ragPipeline(
                 }))
             };
 
-            // Excel content
             const dataToSaveExcel = relevantChunks.map((chunk) => chunk.payload.content);
 
-            // Markdown content
             let mdContent = `# User Query ${docId}\n\n`;
             mdContent += `**Query:** ${userQuery.query}\n\n`;
             mdContent += `## Relevant Chunks\n\n`;
@@ -95,15 +92,12 @@ export async function ragPipeline(
                 mdContent += "```\n\n";
             });
 
-            // Save JSON
             const jsonPath = `${dirPath}/${docId}.json`;
             await fs.writeFile(jsonPath, JSON.stringify(dataToSaveJson, null, 2));
 
-            // Save Markdown
             const mdPath = `${dirPath}/${docId}.md`;
             await fs.writeFile(mdPath, mdContent);
 
-            // Collect for Excel
             allRelevantChunks.push(dataToSaveExcel);
 
             console.log(`Saved relevant chunks to ${jsonPath} and ${mdPath}`);
@@ -114,7 +108,6 @@ export async function ragPipeline(
             console.log(`Code expansion completed for query ${docId}`);
             await processCodeGenerationForQuery(docId, userQuery.query);
             console.log(`Code generation completed for query ${docId}`);
-
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
             allRelevantChunks.push([]);
@@ -122,6 +115,8 @@ export async function ragPipeline(
             console.warn(`User query at index ${i} is undefined.`);
             allRelevantChunks.push([]);
         }
+        console.timeEnd(`Query ${docId} Processing Time`);
     }
-    console.log("RAG pipeline completed!");
+    console.timeEnd("Processing User Queries");
+    console.timeEnd("RAG Pipeline Total Time");
 }
