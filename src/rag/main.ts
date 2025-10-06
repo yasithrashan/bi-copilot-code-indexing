@@ -8,6 +8,7 @@ import fs from 'fs/promises';
 import { expandCode } from "./code-generation/code_expand";
 import path from "path";
 import { processCodeGenerationForQuery } from "./code-generation/code";
+import { evaluateCodeQuality } from "./code-generation/code_quality";
 
 export async function ragPipeline(
     ballerinaDir: string,
@@ -108,6 +109,14 @@ export async function ragPipeline(
             console.log(`Code expansion completed for query ${docId}`);
             await processCodeGenerationForQuery(docId, userQuery.query);
             console.log(`Code generation completed for query ${docId}`);
+            await evaluateCodeQuality({
+                chunksFilePath: jsonPath,
+                expandedCodeFilePath: path.join('rag_outputs', 'expand_code', `${docId}.md`),
+                projectPath: ballerinaDir,
+                outputDir: path.join('rag_outputs', 'code_quality_results'),
+                docId
+            });
+            console.log(`Code quality evaluation completed for query ${docId}`);
         } else if (userQuery) {
             console.warn(`No embedding found for user query: ${userQuery.query}`);
             allRelevantChunks.push([]);
