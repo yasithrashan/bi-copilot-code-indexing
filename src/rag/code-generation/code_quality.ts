@@ -12,21 +12,16 @@ interface QualityEvaluatorParams {
   docId?: number;
 }
 
-export async function evaluateCodeQuality(params: QualityEvaluatorParams): Promise<string> {
+export async function evaluateRelevantChunksQuality(params: QualityEvaluatorParams): Promise<string> {
   const {
     chunksFilePath,
-    expandedCodeFilePath,
     projectPath,
-    outputDir = "rag_outputs/code_quality_results",
+    outputDir = "rag_outputs/relevant_chunk_quality_results",
     docId,
   } = params;
 
   if (!fs.existsSync(chunksFilePath)) {
     throw new Error(`Relevant chunks file not found: ${chunksFilePath}`);
-  }
-
-  if (!fs.existsSync(expandedCodeFilePath)) {
-    throw new Error(`Expanded code file not found: ${expandedCodeFilePath}`);
   }
 
   if (!fs.existsSync(projectPath)) {
@@ -39,16 +34,12 @@ export async function evaluateCodeQuality(params: QualityEvaluatorParams): Promi
     const userQuery = rawData.query;
     const chunks: RelevantChunk[] = rawData.relevant_chunks || [];
 
-    // Read expanded code markdown
-    const expandedCode = fs.readFileSync(expandedCodeFilePath, "utf-8");
-
     // Read all .bal files in project directory
     const balFiles = fs.readdirSync(projectPath).filter((f) => f.endsWith(".bal"));
     if (balFiles.length === 0) {
       throw new Error("No .bal files found in project path.");
     }
 
-    // Collect all source files
     let allBalContent = "## Complete Source Files\n\n";
     for (const file of balFiles) {
       const fullPath = path.join(projectPath, file);
@@ -76,195 +67,103 @@ export async function evaluateCodeQuality(params: QualityEvaluatorParams): Promi
       chunksContext += `\`\`\`ballerina\n${content}\n\`\`\`\n\n`;
     });
 
-    // System prompt for quality evaluation
+    // Focused system prompt
     const systemPrompt = `
-You are a code quality evaluation assistant specializing in RAG (Retrieval-Augmented Generation) systems for code analysis.
+You are evaluating the retrieval quality of chunks in a RAG (Retrieval-Augmented Generation) system. Your goal is to determine how well the retrieved chunks cover the user query based on the full project file.
 
-<source_code_files>
-${allBalContent}
-</source_code_files>
-
-<relevant_chunks>
-${chunksContext}
-</relevant_chunks>
-
-<expanded_code>
-${expandedCode}
-</expanded_code>
-
+Here is the user query:
 <user_query>
 ${userQuery}
 </user_query>
 
-## Your Task
+Here is the full project file content:
+<project_file_content>
+${allBalContent}
+</project_file_content>
 
-Evaluate the quality of both the relevant chunks retrieval and the code expansion process. Provide comprehensive feedback and scoring.
+Here are the relevant chunks that were retrieved:
+<relevant_chunks>
+${chunksContext}
+</relevant_chunks>
 
-## Evaluation Criteria
+Your Task:
 
-### 1. Relevant Chunks Quality (50% of total score)
-Assess:
-- **Relevance to Query**: Do the retrieved chunks directly address the user's query?
-- **Completeness**: Are all necessary code components retrieved (imports, types, functions, services)?
-- **Accuracy**: Are the chunks semantically relevant to the query intent?
-- **Coverage**: Do the chunks provide sufficient context from the codebase?
-- **Ranking Quality**: Are the highest-scored chunks truly the most relevant?
+Evaluate whether the retrieved chunks are relevant and complete in relation to the user query. Focus only on how well the chunks match the query and whether any important information from the project file is missing.
 
-Provide:
-- Detailed feedback on what was retrieved correctly
-- What relevant code pieces are missing, why that missing part relevant to code modification
-- Any irrelevant chunks that were included
-- Score: X/50
+Step 1: Analysis (write inside <analysis_process> tags)
+In this section, reason step by step:
+Identify what specific information the user query is asking for.
+Quote relevant sections from the project file that could help answer it.
+Quote what information is actually present in the retrieved chunks.
+Compare what should have been retrieved vs. what was retrieved.
+Note if any chunks are irrelevant or if key parts of the project file are missing.
+Keep this section structured and concise — no unnecessary commentary.
 
-### 2. Code Expansion Quality (50% of total score)
-Assess:
-- **Correctness**: Does the expanded code accurately represent the source code without modifications?
-- **Completeness**: Are all dependencies, imports, and related code included?
-- **Organization**: Is the code well-structured and easy to understand?
-- **Context**: Does the expansion provide sufficient context to understand the code?
-- **Relevance Filtering**: Does it exclude irrelevant code while including all necessary code?
+Step 2: Evaluation (in markdown format)
+After the analysis, provide a short, structured evaluation:
+## Coverage Analysis
+[Assess if the chunks fully cover what the user query needs.]
 
-Provide:
-- Detailed feedback on the expansion quality
-- What was done well
-- What could be improved
-- Missing dependencies or context
-- Score: X/50
+## Quality Assessment
+[Judge the relevance and usefulness of the retrieved chunks. Mention any irrelevant ones.]
 
-## Output Format
+## Gap Identification
+[List key missing information from the project file that should have been retrieved.]
 
-Provide your evaluation in the following markdown format:
+## Overall Feedback
+[Give brief improvement suggestions for retrieval quality.]
 
-# Code Quality Evaluation Report
+## Justification
+[Summarize reasoning for the final score.]
 
-**Query:** [user query]
+## Score
+[Numeric score from 0–100 following this scale:]
+- 90–100: Excellent (complete and relevant)
+- 70–89: Good (minor gaps)
+- 50–69: Fair (some missing info)
+- 30–49: Poor (major gaps)
+- 0–29: Very poor (mostly irrelevant)
 
-**Date:** [current date]
-
----
-
-## Executive Summary
-
-[2-3 sentence overview of the overall quality]
-
-**Total Score: X/100**
-
----
-
-## 1. Relevant Chunks Quality Evaluation
-
-**Score: X/50**
-
-### Strengths
-- [List specific strengths]
-
-### Weaknesses
-- [List specific issues]
-
-### Missing Relevant Code
-- [List any relevant code that should have been retrieved but wasn't]
-
-### Irrelevant Chunks
-- [List any chunks that were retrieved but aren't relevant]
-
-### Detailed Analysis
-[Provide detailed analysis of the chunk retrieval quality]
-
----
-
-## 2. Code Expansion Quality Evaluation
-
-**Score: X/50**
-
-### Strengths
-- [List specific strengths]
-
-### Weaknesses
-- [List specific issues]
-
-### Missing Components
-- [List any missing imports, types, functions, or context]
-
-### Organization Assessment
-[Evaluate how well the code is organized and structured]
-
-### Detailed Analysis
-[Provide detailed analysis of the code expansion quality]
-
----
-
-## Overall Recommendations
-
-1. [Specific recommendation for improving chunk retrieval]
-2. [Specific recommendation for improving code expansion]
-3. [Additional recommendations]
-
----
-
-## Scoring Breakdown
-
-| Category | Score | Weight | Weighted Score |
-|----------|-------|--------|----------------|
-| Relevant Chunks Quality | X/50 | 50% | X/50 |
-| Code Expansion Quality | X/50 | 50% | X/50 |
-| **Total** | | | **X/100** |
-
----
-
-*Evaluation completed at [timestamp]*
-
-IMPORTANT:
-- Be objective and specific in your evaluation
-- Provide actionable feedback
-- Consider the user query context when evaluating relevance
-- A perfect score (100/100) means all relevant code was retrieved and perfectly expanded with complete context
-- Be critical but fair in your assessment
 `;
 
-    // Generate quality evaluation using Claude
+    // Generate evaluation using Claude
     const { text } = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
       system: systemPrompt,
       messages: [
         {
           role: "user",
-          content: `Please evaluate the quality of the relevant chunks retrieval and code expansion for the query: "${userQuery}"`,
+          content: `Please evaluate the relevant chunk retrieval quality for the query: "${userQuery}"`,
         },
       ],
-      maxOutputTokens: 4096 * 2,
+      maxOutputTokens: 4096,
     });
 
-    // Prepare output
+    // Save output
     const outputDirPath = path.resolve(outputDir);
     if (!fs.existsSync(outputDirPath)) {
       fs.mkdirSync(outputDirPath, { recursive: true });
     }
 
-    let fileName: string;
-    if (docId) {
-      fileName = `${docId}.md`;
-    } else {
-      const baseName = path.basename(chunksFilePath, ".json");
-      fileName = /^\d+$/.test(baseName) ? `${baseName}_quality.md` : `quality_${Date.now()}.md`;
-    }
-
+    const fileName = docId ? `${docId}.md` : `quality_${Date.now()}.md`;
     const outputPath = path.join(outputDirPath, fileName);
     fs.writeFileSync(outputPath, text, "utf-8");
 
-    console.log(`Quality evaluation saved to: ${outputPath}`);
+    console.log(`Chunk quality evaluation saved to: ${outputPath}`);
     return outputPath;
   } catch (error) {
-    console.error("Failed to evaluate code quality:", error);
+    console.error("Failed to evaluate chunk quality:", error);
     throw error;
   }
 }
+
 
 // Batch processing: evaluate all expanded code files
 export async function batchEvaluateQuality(
   chunksDir: string,
   expandedCodeDir: string,
   projectPath: string,
-  outputDir: string = "rag_outputs/code_quality_results"
+  outputDir: string = "rag_outputs/relevant_chunks_code_quality_results"
 ) {
   if (!fs.existsSync(chunksDir)) {
     throw new Error(`Chunks directory not found: ${chunksDir}`);
@@ -299,7 +198,7 @@ export async function batchEvaluateQuality(
     console.log(`   Chunks: ${chunksFilePath}`);
     console.log(`   Expanded: ${expandedCodeFilePath}`);
 
-    await evaluateCodeQuality({
+    await evaluateRelevantChunksQuality({
       chunksFilePath,
       expandedCodeFilePath,
       projectPath,

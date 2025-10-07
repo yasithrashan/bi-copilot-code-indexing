@@ -1,9 +1,9 @@
 {
   "langLibs": 13563,
   "apiDocs": 458,
-  "expandedCode": 801,
+  "expandedCode": 644,
   "userQuery": 44,
-  "systemPrompt": 16392,
-  "generatedCode": 786,
-  "totalInput": 16436
+  "systemPrompt": 16235,
+  "generatedCode": 517,
+  "totalInput": 16279
 }
