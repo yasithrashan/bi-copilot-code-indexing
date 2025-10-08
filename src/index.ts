@@ -1,6 +1,6 @@
-import { ragPipeline } from "./rag/main";
-import { keywordSearch } from "./keyword-search/main";
-import { agentWorkflow } from "./agentic/main";
+import { ragPipeline } from "./approaches/rag/main";
+// import { keywordSearch } from "./keyword-search/main";
+// import { agentWorkflow } from "./agentic/main";
 
 const balFilePath = process.env.BAL_PROJECT_DIRECTORY;
 const voyageApiKey = process.env.VOYAGE_API_KEY;
