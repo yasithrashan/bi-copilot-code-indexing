@@ -3,7 +3,7 @@ import { loadFiles, readFiles } from "../../shared/file_extraction";
 import { getEmbeddings } from "./embeddings";
 import { BallerinaChunker } from "./chunker";
 import { createPineconeClient, createCollection, upsertChunks, searchRelevantChunks } from "./vector_db";
-import { GetUserQuery } from "./queries";
+import { GetUserQuery } from "../../shared/queries";
 import fs from 'fs/promises';
 import { expandCode } from "./code-generation/code_expand";
 import path from "path";
@@ -109,7 +109,7 @@ async function processQueries(
             chunksFilePath: jsonPath,
             expandedCodeFilePath: path.join(expandOutputDir, `${docId}.md`),
             projectPath: ballerinaDir,
-            outputDir: path.join('outputs/rag_outputs', 'relevant_chunks_code_quality_results'),
+            outputDir: path.join('outputs/rag_outputs', 'quality_evaluation'),
             docId
         });
     }

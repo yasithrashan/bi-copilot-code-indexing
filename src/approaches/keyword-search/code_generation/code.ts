@@ -4,8 +4,8 @@ import { anthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
 import * as path from "path";
-import type { Library } from "../../libs/types";
-import { LANGLIBS } from "../../libs/langlibs";
+import type { Library } from "../../../libs/types";
+import { LANGLIBS } from "../../../libs/langlibs";
 
 // Define the user query interface
 interface UserQuery {
@@ -60,7 +60,7 @@ function loadApiDocsForQuery(queryId: number): Library {
 
 // Function to load expanded code for a specific query
 function loadExpandedCodeForQuery(queryId: number): string {
-    const expandedCodePath = path.join(process.cwd(), "./keyword_search_outputs/expand_code", `${queryId}.md`);
+    const expandedCodePath = path.join(process.cwd(), "./outputs/keyword_search_outputs/expand_code", `${queryId}.md`);
 
     if (!fs.existsSync(expandedCodePath)) {
         throw new Error(`Expanded code not found for query ${queryId} at path: ${expandedCodePath}`);
@@ -245,7 +245,7 @@ Example Codeblock segment:
 
 // Function to save token usage statistics
 function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): void {
-    const outputDir = path.join(process.cwd(), "keyword_search_outputs/token_usage");
+    const outputDir = path.join(process.cwd(), "outputs/keyword_search_outputs/token_usage");
 
     // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) {
@@ -259,7 +259,7 @@ function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): void {
 
 // Function to save generated code to file
 function saveGeneratedCode(queryId: number, generatedCode: string): void {
-    const outputDir = path.join(process.cwd(), "keyword_search_outputs/generated_code");
+    const outputDir = path.join(process.cwd(), "outputs/keyword_search_outputs/generated_code");
 
     // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) {

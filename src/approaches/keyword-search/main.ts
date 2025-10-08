@@ -1,94 +1,104 @@
+import fs from "fs";
+import path from "path";
 import { codeSplitter } from "./split_code";
-import { loadBallerinaFiles, readFileContents } from "./file_extractor";
-import { dataExtarctFromExcelSheet } from "../excel";
-import fs from 'fs';
-import path from 'path';
+import { loadFiles, readFiles } from "../../shared/file_extraction";
+import { GetUserQuery } from "../../shared/queries";
 import { bm25Search } from "./search_algorithm";
-import { codeExpander } from "./code_generation/code_expand"
+import { codeExpander } from "./code_generation/code_expand";
 import { processAllQueries } from "./code_generation/code";
-import { batchEvaluateKeywordSearchQuality } from "./code_generation/relevant_chunks_code_quality";
+import { codeQualityEvaluator } from "./code_generation/code_quality"
 
-const filePath = "./ballerina";
-const splitCodeFilePath = './keyword_search_outputs/source_code_split.json'
+const FILE_PATH = "./ballerina";
+const SPLIT_CODE_FILE_PATH = "./outputs/keyword_search_outputs/source_code_split.json";
 
-// Use process.cwd() to get the root directory of your project
-const rootDir = process.cwd();
-const dir = path.join(rootDir, 'keyword_search_outputs/keyword_search_result');
-const mdDir = path.join(rootDir, 'keyword_search_outputs/keyword_search_result_md');
+const ROOT_DIR = process.cwd();
+const OUTPUT_DIRS = {
+    json: path.join(ROOT_DIR, "outputs/keyword_search_outputs/keyword_search_result"),
+    md: path.join(ROOT_DIR, "outputs/keyword_search_outputs/keyword_search_result_md"),
+    quality: path.join(ROOT_DIR, "outputs/keyword_search_outputs/quality_evaluation"),
+};
 
-if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// Ensure required output directories exist
+for (const dir of Object.values(OUTPUT_DIRS)) {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
 }
 
-if (!fs.existsSync(mdDir)) {
-    fs.mkdirSync(mdDir, { recursive: true });
+function logStep(message: string) {
+    console.log(`[INFO] ${message}`);
 }
 
 export async function keywordSearch() {
-    const files = await loadBallerinaFiles(filePath);
-    const fileData = await readFileContents(files);
+    try {
+        logStep("Loading Ballerina source files...");
+        const files = loadFiles(FILE_PATH);
 
-    const splitter = new codeSplitter();
-    let allChunks: any[] = [];
+        // Read each file content using your existing readFiles function
+        const fileData = files.map((filePath) => ({
+            filePath,
+            content: readFiles(filePath),
+        }));
+        logStep(`Loaded ${files.length} files.`);
 
-    for (const file of fileData) {
-        const chunks = splitter.chunkBallerinaCode(file.content, file.filePath);
-        allChunks = allChunks.concat(chunks);
+        logStep("Splitting code into chunks...");
+        const splitter = new codeSplitter();
+        const allChunks = fileData.flatMap((file) =>
+            splitter.chunkBallerinaCode(file.content, file.filePath)
+        );
+        splitter.saveChunksToJson(allChunks, FILE_PATH);
+        logStep(`Code splitting completed. Total chunks: ${allChunks.length}`);
+
+        logStep("Getting user queries...");
+        const queries = await GetUserQuery();
+        logStep(`Loaded ${queries.length} queries.`);
+
+        logStep("Running BM25 keyword search for all queries...");
+        for (const { id, query } of queries) {
+            const keywordResults = await bm25Search(SPLIT_CODE_FILE_PATH, query);
+
+            // Save JSON result
+            const jsonFilePath = path.join(OUTPUT_DIRS.json, `${id}.json`);
+            fs.writeFileSync(
+                jsonFilePath,
+                JSON.stringify(keywordResults, null, 2),
+                "utf8"
+            );
+
+            // Build Markdown summary
+            const mdFilePath = path.join(OUTPUT_DIRS.md, `${id}.md`);
+            const mdContent = [
+                `## Query ID: ${id}`,
+                `**Query:** ${query}\n`,
+                `**Results:**\n`,
+                ...keywordResults.map(
+                    (res, index) =>
+                        `### Chunk ${String(index + 1).padStart(2, "0")}\n` +
+                        `**Score:** ${res.score.toFixed(4)}\n` +
+                        `**ID:** ${res.id}\n\n` +
+                        "```ballerina\n" +
+                        `${res.content}\n` +
+                        "```\n"
+                ),
+            ].join("\n");
+
+            fs.writeFileSync(mdFilePath, mdContent, "utf8");
+
+            logStep(`Saved search results for Query ${id}.`);
+        }
+
+        // Add quality evaluation step here (after search, before expansion)
+        logStep("Running chunk quality evaluation...");
+        await codeQualityEvaluator(queries);
+
+        logStep("Running code expansion step...");
+        await codeExpander(queries);
+
+        logStep("Running code generation step...");
+        await processAllQueries(queries);
+
+        logStep("Keyword search workflow completed successfully.");
+    } catch (error) {
+        console.error("[ERROR] Keyword search workflow failed:", error);
     }
-
-    const outputPath = splitter.saveChunksToJson(allChunks, filePath);
-
-    // Extract queries from Excel sheet
-    const queries = await dataExtarctFromExcelSheet();
-
-    // Call the BM25 search algorithm for every user query
-    for (const q of queries) {
-        console.log(`ID: ${q.id}, Query: ${q.query}`);
-        const userQuery = q.query;
-
-        const keywordSearchResult = await bm25Search(splitCodeFilePath, userQuery);
-
-        // Save JSON file in root/keyword-search-outputs/keyword_search_result/
-        const jsonFilePath = path.join(dir, `${q.id}.json`);
-        fs.writeFileSync(jsonFilePath, JSON.stringify(keywordSearchResult, null, 2), 'utf8');
-
-        // Save MD file in root/keyword-search-outputs/keyword_search_result_md/
-        const mdFilePath = path.join(mdDir, `${q.id}.md`);
-
-        // Build readable Markdown content (numbered chunks)
-        let mdContent = `## Query ID: ${q.id}\n`;
-        mdContent += `**Query:** ${userQuery}\n\n`;
-        mdContent += `**Results:**\n\n`;
-
-        keywordSearchResult.forEach((res, index) => {
-            const chunkNumber = String(index + 1).padStart(2, '0');
-            mdContent += `### Chunk ${chunkNumber}\n`;
-            mdContent += `**Score:** ${res.score.toFixed(4)}\n`;
-            mdContent += `**ID:** ${res.id}\n\n`;
-            mdContent += `\`\`\`ballerina\n${res.content}\n\`\`\`\n\n`;
-        });
-
-        fs.writeFileSync(mdFilePath, mdContent, 'utf8');
-
-        console.log(`Results saved for query ${q.id}:`);
-        console.log(`  - JSON: ${jsonFilePath}`);
-        console.log(`  - MD: ${mdFilePath}`);
-    }
-
-    console.log('\n=== Starting Keyword Search Chunk Quality Evaluation ===');
-    await batchEvaluateKeywordSearchQuality(
-        dir,        // path to JSON keyword search results
-        filePath,   // ballerina project directory
-        path.join(rootDir, "keyword_search_outputs/relevant_chunk_quality") // output dir
-    );
-
-    // After processing all queries, run code expansion
-    console.log('\n=== Starting Code Expansion ===');
-    await codeExpander(queries);
-
-    // After code expansion, run code generation
-    console.log('\n=== Starting Code Generation ===');
-    await processAllQueries(queries);
-
-    console.log('\n=== All workflows completed successfully! ===');
 }

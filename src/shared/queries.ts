@@ -1,4 +1,4 @@
-import { dataExtarctFromExcelSheet } from "../../shared/excel";
+import { dataExtarctFromExcelSheet } from "./excel";
 
 export async function GetUserQuery() {
   const queries = await dataExtarctFromExcelSheet();
