@@ -1,0 +1,36 @@
+{
+  "totalQueries": 6,
+  "averageScore": 59.17,
+  "evaluations": [
+    {
+      "queryId": 1,
+      "query": "Update the pagination logic so it validates 'page' and 'limit' values, returning a 400 Bad Request if they are less than or equal to zero",
+      "score": 70
+    },
+    {
+      "queryId": 2,
+      "query": "Modify the PUT /books/{bookId} endpoint to reuse the validation logic (validateAndFormatBook) so updates also check for empty titles, negative prices, etc.",
+      "score": 65
+    },
+    {
+      "queryId": 3,
+      "query": "Modify the update books endpoint to prevent duplicate ISBNs and return a 409 Conflict error if a book with the same ISBN already exists.",
+      "score": 30
+    },
+    {
+      "queryId": 4,
+      "query": "Extend the category service to also support update and delete operations for categories.",
+      "score": 65
+    },
+    {
+      "queryId": 5,
+      "query": "Standardize the error responses so they always return a JSON object with an error message (e.g., { \\\"error\\\": \\\"Book not found\\\" }) instead of just plain HTTP status codes.",
+      "score": 65
+    },
+    {
+      "queryId": 6,
+      "query": "Add a new HTTP server to the current implementation.",
+      "score": 60
+    }
+  ]
+}

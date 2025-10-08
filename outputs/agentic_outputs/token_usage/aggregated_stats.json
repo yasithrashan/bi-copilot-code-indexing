@@ -1,0 +1,111 @@
+{
+  "totalQueries": 6,
+  "successfulQueries": 6,
+  "failedQueries": 0,
+  "tokenUsage": {
+    "totalLangLibs": 81378,
+    "totalApiDocs": 8277,
+    "totalBalMdContent": 8568,
+    "totalExtractedCode": 2080,
+    "totalUserQueries": 211,
+    "totalSystemPrompts": 105873,
+    "totalGeneratedCode": 5756,
+    "totalInput": 108248,
+    "totalToolCalls": 84,
+    "averageLangLibs": 13563,
+    "averageApiDocs": 1380,
+    "averageBalMdContent": 1428,
+    "averageExtractedCode": 347,
+    "averageUserQuery": 35,
+    "averageSystemPrompt": 17646,
+    "averageGeneratedCode": 959,
+    "averageInput": 18041,
+    "averageToolCalls": 14
+  },
+  "queryDetails": [
+    {
+      "queryId": 1,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 309,
+        "balMdContent": 1428,
+        "extractedCode": 413,
+        "userQuery": 41,
+        "systemPrompt": 16575,
+        "generatedCode": 643,
+        "totalInput": 17043,
+        "toolCalls": 14
+      }
+    },
+    {
+      "queryId": 2,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 458,
+        "balMdContent": 1428,
+        "extractedCode": 466,
+        "userQuery": 44,
+        "systemPrompt": 16724,
+        "generatedCode": 565,
+        "totalInput": 17248,
+        "toolCalls": 14
+      }
+    },
+    {
+      "queryId": 3,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 458,
+        "balMdContent": 1428,
+        "extractedCode": 292,
+        "userQuery": 39,
+        "systemPrompt": 16724,
+        "generatedCode": 588,
+        "totalInput": 17069,
+        "toolCalls": 14
+      }
+    },
+    {
+      "queryId": 4,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 606,
+        "balMdContent": 1428,
+        "extractedCode": 279,
+        "userQuery": 22,
+        "systemPrompt": 16872,
+        "generatedCode": 740,
+        "totalInput": 17187,
+        "toolCalls": 14
+      }
+    },
+    {
+      "queryId": 5,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 5570,
+        "balMdContent": 1428,
+        "extractedCode": 448,
+        "userQuery": 48,
+        "systemPrompt": 21836,
+        "generatedCode": 1983,
+        "totalInput": 22346,
+        "toolCalls": 14
+      }
+    },
+    {
+      "queryId": 6,
+      "tokenUsage": {
+        "langLibs": 13563,
+        "apiDocs": 876,
+        "balMdContent": 1428,
+        "extractedCode": 182,
+        "userQuery": 17,
+        "systemPrompt": 17142,
+        "generatedCode": 1237,
+        "totalInput": 17355,
+        "toolCalls": 14
+      }
+    }
+  ]
+}

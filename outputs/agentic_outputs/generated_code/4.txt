@@ -1,0 +1,105 @@
+=== QUERY ID 4 ===
+Extend the category service to also support update and delete operations for categories.
+
+=== API DOC USED ===
+api_docs/4.json
+
+=== EXTRACTED CODE USED ===
+outputs/agentic_outputs/expand_code/4.md
+
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 606,
+  "balMdContent": 1428,
+  "extractedCode": 279,
+  "userQuery": 22,
+  "systemPrompt": 16872,
+  "generatedCode": 740,
+  "totalInput": 17187,
+  "toolCalls": 14
+}
+
+=== GENERATED CODE RESPONSE ===
+Now I can see the current implementation. I need to extend the admin service to add PUT (update) and DELETE operations for categories. Here's the enhanced implementation:
+
+<code filename="main.bal">
+```ballerina
+service /admin on new http:Listener(servicePort) {
+    // Add book category
+    resource function post categories(@http:Payload BookCategory category) returns http:Created|http:BadRequest {
+        totalRequests += 1;
+
+        if category.categoryName.trim().length() == 0 {
+            return http:BAD_REQUEST;
+        }
+
+        bookCategories[category.categoryId] = category;
+        return http:CREATED;
+    }
+
+    // Get all categories
+    resource function get categories() returns BookCategory[] {
+        totalRequests += 1;
+        return bookCategories.toArray();
+    }
+
+    // Update book category
+    resource function put categories/[string categoryId](@http:Payload BookCategory category) returns BookCategory|http:NotFound|http:BadRequest {
+        totalRequests += 1;
+
+        if !bookCategories.hasKey(categoryId) {
+            return http:NOT_FOUND;
+        }
+
+        if category.categoryName.trim().length() == 0 {
+            return http:BAD_REQUEST;
+        }
+
+        // Ensure the categoryId in the path matches the one in the payload
+        BookCategory updatedCategory = {
+            categoryId: categoryId,
+            categoryName: category.categoryName,
+            description: category.description
+        };
+
+        bookCategories[categoryId] = updatedCategory;
+        return updatedCategory;
+    }
+
+    // Delete book category
+    resource function delete categories/[string categoryId]() returns http:NoContent|http:NotFound {
+        totalRequests += 1;
+
+        if !bookCategories.hasKey(categoryId) {
+            return http:NOT_FOUND;
+        }
+
+        _ = bookCategories.remove(categoryId);
+        return http:NO_CONTENT;
+    }
+}
+```
+</code>
+
+The extended category service now includes:
+
+1. **PUT `/admin/categories/{categoryId}`** - Updates an existing category
+   - Validates that the category exists (returns 404 if not found)
+   - Validates that the category name is not empty (returns 400 if invalid)
+   - Updates the category and returns the updated category data
+   - Returns 200 OK with the updated category
+
+2. **DELETE `/admin/categories/{categoryId}`** - Deletes an existing category
+   - Validates that the category exists (returns 404 if not found)
+   - Removes the category from the bookCategories map
+   - Returns 204 No Content on successful deletion
+
+Both operations follow RESTful conventions and include proper error handling:
+- **404 Not Found** when the category doesn't exist
+- **400 Bad Request** for invalid data (empty category name)
+- **200 OK** for successful updates (returning the updated category)
+- **204 No Content** for successful deletions
+
+The implementation maintains consistency with the existing code style and uses the same validation patterns as the other endpoints in the service.
+
