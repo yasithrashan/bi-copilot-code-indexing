@@ -1,6 +1,6 @@
 import { ragPipeline } from "./approaches/rag/main";
 import { keywordSearch } from "./approaches/keyword-search/main";
-// import { agentWorkflow } from "./agentic/main";
+import { agentWorkflow } from "./approaches/agentic/main";
 
 const balFilePath = process.env.BAL_PROJECT_DIRECTORY;
 const voyageApiKey = process.env.VOYAGE_API_KEY;
@@ -12,5 +12,5 @@ if (!voyageApiKey) throw new Error("VOYAGE_API_KEY environment variable is not s
 
 
 // await ragPipeline(balFilePath, voyageApiKey, pineconeApiKey);
-await keywordSearch();
-// await agentWorkflow();
+// await keywordSearch();
+await agentWorkflow();

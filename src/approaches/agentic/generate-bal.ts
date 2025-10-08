@@ -186,7 +186,7 @@ export async function generateBalMd(ballerinaPath: string): Promise<string> {
         ],
     });
 
-    const outputDir = path.join(process.cwd(), 'agentic_outputs/');
+    const outputDir = path.join(process.cwd(), 'outputs/agentic_outputs/');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }

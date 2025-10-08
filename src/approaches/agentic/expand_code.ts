@@ -3,13 +3,13 @@ import { anthropic } from "@ai-sdk/anthropic";
 import * as fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { dataExtarctFromExcelSheet } from "../excel";
+import { dataExtarctFromExcelSheet } from "../../shared/excel";
 
 // Load project path
 const projectPath = 'ballerina'
 
 // Load bal.md path (but don't read it yet!)
-const balMdPath = 'agentic_outputs/bal.md'
+const balMdPath = 'outputs/agentic_outputs/bal.md'
 
 // Tool definition
 const createExtractRelevantContentTool = (queryId: number) => tool({
@@ -35,7 +35,7 @@ const createExtractRelevantContentTool = (queryId: number) => tool({
 ${result.extractedContent}`;
 
         // Save result as md file in expand_code folder
-        const outputDir = path.join(process.cwd(), "agentic_outputs/expand_code");
+        const outputDir = path.join(process.cwd(), "outputs/agentic_outputs/expand_code");
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
         const outputPath = path.join(outputDir, `${queryId}.md`);
@@ -134,7 +134,7 @@ export async function processAllQueries(): Promise<void> {
         console.log(`Found ${queries.length} queries to process`);
 
         // Clear the expand_code folder if it exists
-        const outputDir = path.join(process.cwd(), "agentic_outputs/expand_code");
+        const outputDir = path.join(process.cwd(), "outputs/agentic_outputs/expand_code");
         if (fs.existsSync(outputDir)) {
             fs.rmSync(outputDir, { recursive: true, force: true });
         }

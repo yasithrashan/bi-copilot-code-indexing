@@ -3,11 +3,11 @@ import { ANTHROPIC_SONNET_4, getAnthropicClinet } from "./connection";
 import { anthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
-import type { Library } from "../libs/types";
-import { LANGLIBS } from "../libs/langlibs";
+import type { Library } from "../../libs/types";
+import { LANGLIBS } from "../../libs/langlibs";
 import path from "path";
 import { z } from "zod";
-import { dataExtarctFromExcelSheet } from "../excel";
+import { dataExtarctFromExcelSheet } from "../../shared/excel";
 
 // Add interface for token usage
 interface TokenUsage {
@@ -70,7 +70,7 @@ function loadApiDocForQuery(queryId: number): Library {
 }
 
 // Load bal.md file path (don't read it at module level)
-const balMdPath = 'agentic_outputs/bal.md';
+const balMdPath = 'outputs/agentic_outputs/bal.md';
 
 // Updated Generate Ballerina code function with token tracking
 async function generateBallerinaCodeWithTokens(
@@ -134,7 +134,7 @@ async function generateBallerinaCodeWithTokens(
                 description: 'Reads the extracted code file from expand_code directory and returns the actual relevant code for modification.',
                 inputSchema: z.object({}),
                 execute: async () => {
-                    const extractFilePath = path.join(process.cwd(), "agentic_outputs/expand_code", `${queryId}.md`);
+                    const extractFilePath = path.join(process.cwd(), "outputs/agentic_outputs/expand_code", `${queryId}.md`);
 
                     if (!fs.existsSync(extractFilePath)) {
                         console.log(`No extract file found for Query ID ${queryId}, will generate from scratch`);
@@ -187,7 +187,7 @@ async function generateBallerinaCodeWithTokens(
 
 // Function to save token usage statistics
 function saveTokenUsage(queryId: number, tokenUsage: TokenUsage): void {
-    const outputDir = path.join(process.cwd(), "agentic_outputs/token_usage");
+    const outputDir = path.join(process.cwd(), "outputs/agentic_outputs/token_usage");
 
     // Create output directory if it doesn't exist
     if (!fs.existsSync(outputDir)) {
@@ -264,7 +264,7 @@ function saveAggregatedTokenUsage(results: QueryProcessingResult[]): void {
     aggregated.tokenUsage.averageInput = Math.round(aggregated.tokenUsage.totalInput / count);
     aggregated.tokenUsage.averageToolCalls = Math.round(aggregated.tokenUsage.totalToolCalls / count);
 
-    const outputPath = path.join(process.cwd(), "agentic_outputs/token_usage", "aggregated_stats.json");
+    const outputPath = path.join(process.cwd(), "outputs/agentic_outputs/token_usage", "aggregated_stats.json");
     fs.writeFileSync(outputPath, JSON.stringify(aggregated, null, 2), "utf-8");
     console.log(`Aggregated token usage saved to: ${outputPath}`);
 }
@@ -285,7 +285,7 @@ export async function generateCodeForAllQueries(): Promise<void> {
         }
 
         // Check if expand_code directory exists
-        const expandCodeDir = path.join(process.cwd(), "agentic_outputs/expand_code");
+        const expandCodeDir = path.join(process.cwd(), "outputs/agentic_outputs/expand_code");
         if (!fs.existsSync(expandCodeDir)) {
             console.log(`Warning: expand_code directory not found at ${expandCodeDir}. Code will be generated from scratch.`);
         }
@@ -295,8 +295,8 @@ export async function generateCodeForAllQueries(): Promise<void> {
         console.log(`Found ${queries.length} queries to process for code generation`);
 
         // Ensure output directories
-        const outputDir = path.join(process.cwd(), "agentic_outputs/generated_code");
-        const tokenUsageDir = path.join(process.cwd(), "agentic_outputs/token_usage");
+        const outputDir = path.join(process.cwd(), "outputs/agentic_outputs/generated_code");
+        const tokenUsageDir = path.join(process.cwd(), "outputs/agentic_outputs/token_usage");
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
         }
@@ -334,7 +334,7 @@ ${queryItem.query}
 ${apiDocPath}
 
 === EXTRACTED CODE USED ===
-agentic_outputs/expand_code/${queryItem.id}.md
+outputs/agentic_outputs/expand_code/${queryItem.id}.md
 
 === TOKEN USAGE ===
 ${JSON.stringify(result.tokenUsage, null, 2)}
@@ -418,7 +418,7 @@ export async function processAgenticCodeGenerationForQuery(
         const result = await generateBallerinaCodeWithTokens(queryText, queryId);
 
         // Save generated code
-        const outputDir = path.join(process.cwd(), "agentic_outputs/generated_code");
+        const outputDir = path.join(process.cwd(), "outputs/agentic_outputs/generated_code");
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
         }

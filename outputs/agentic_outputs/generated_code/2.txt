@@ -1,0 +1,46 @@
+=== QUERY ID 2 ===
+Modify the PUT /books/{bookId} endpoint to reuse the validation logic (validateAndFormatBook) so updates also check for empty titles, negative prices, etc.
+
+=== API DOC USED ===
+api_docs/2.json
+
+=== EXTRACTED CODE USED ===
+outputs/agentic_outputs/expand_code/2.md
+
+=== TOKEN USAGE ===
+{
+  "langLibs": 13563,
+  "apiDocs": 458,
+  "balMdContent": 1428,
+  "extractedCode": 466,
+  "userQuery": 44,
+  "systemPrompt": 16724,
+  "generatedCode": 565,
+  "totalInput": 17248,
+  "toolCalls": 14
+}
+
+=== GENERATED CODE RESPONSE ===
+Now I can see the current implementation. The PUT endpoint currently doesn't use the `validateAndFormatBook` function and lacks proper validation. I need to modify it to reuse the validation logic while preserving the existing book ID. Let me update the PUT endpoint:
+
+<code filename="main.bal">
+```ballerina
+resource function put books/[string bookId](@http:Payload BookRequest bookRequest) returns Book|http:NotFound|http:BadRequest|http:InternalServerError {\n    totalRequests += 1;\n\n    if !bookStore.hasKey(k = bookId) {\n        return http:NOT_FOUND;\n    }\n\n    // Reuse validation logic\n    Book|error validationResult = validateAndFormatBook(bookRequest);\n    if validationResult is error {\n        return <http:BadRequest>{\n            body: {\n                message: validationResult.message()\n            }\n        };\n    }\n\n    // Use validated data but preserve the existing book ID\n    Book validatedBook = validationResult;\n    Book updatedBook = {\n        id: bookId, // Preserve the existing ID instead of generating a new one\n        title: validatedBook.title,\n        author: validatedBook.author,\n        isbn: validatedBook.isbn,\n        price: validatedBook.price,\n        quantity: validatedBook.quantity\n    };\n\n    bookStore[bookId] = updatedBook;\n    return updatedBook;\n}
+```
+</code>
+
+The key changes I made to the PUT endpoint are:
+
+1. **Added validation**: Now calls `validateAndFormatBook(bookRequest)` to validate the input data
+2. **Error handling**: If validation fails, returns a `http:BadRequest` response with the error message
+3. **ID preservation**: Uses the validated book data but preserves the existing `bookId` from the path parameter instead of generating a new UUID
+4. **Consistent validation**: Now the PUT endpoint has the same validation logic as other endpoints that create/validate books
+
+This ensures that updates will now properly check for:
+- Empty titles and authors (after trimming whitespace)
+- Negative prices
+- Negative quantities
+- Proper trimming of string fields
+
+The validation is consistent across the application while maintaining the correct behavior for updates (preserving the existing book ID).
+
