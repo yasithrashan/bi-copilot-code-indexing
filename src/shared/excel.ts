@@ -32,7 +32,8 @@ export async function dataExtarctFromExcelSheet(): Promise<QueryWithId[]> {
     }));
 
     // Save the user query and id
-    const dirPath = 'outputs/rag_outputs/user_queries'
+    // const dirPath = 'outputs/rag_outputs/user_queries' THIS LINE CHANGED
+    const dirPath = 'outputs/queries/user_queries'
     fs.mkdirSync(dirPath, { recursive: true })
 
     const jsonFilePath = `${dirPath}/user_queries.json`;

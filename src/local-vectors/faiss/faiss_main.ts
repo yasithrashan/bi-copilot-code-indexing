@@ -14,7 +14,7 @@ import fs from 'fs/promises';
 import path from "path";
 // import { expandCode } from "./code-generation/code_expand";
 // import { processCodeGenerationForQuery } from "./code-generation/code";
-// import { evaluateRelevantChunksQuality } from "./code-generation/code_quality";
+import { evaluateRelevantChunksQuality } from "./faiss_code_quality";
 
 /** Load and chunk all Ballerina files */
 async function loadAndChunkFiles(ballerinaDir: string, chunker: BallerinaChunker): Promise<Chunk[]> {
@@ -125,6 +125,14 @@ async function processQueries(
         }, `# User Query ${docId}\n\n**Query:** ${userQuery.query}\n\n## Relevant Chunks\n\n`);
         const mdPath = path.join(relevantChunksDir, `${docId}.md`);
         await fs.writeFile(mdPath, mdContent);
+
+        // Evaluate code quality
+                await evaluateRelevantChunksQuality({
+                    chunksFilePath: jsonPath,
+                    projectPath: ballerinaDir,
+                    outputDir: path.join('outputs/faiss_outputs', 'quality_evaluation'),
+                    docId
+                });
 
         // Uncomment these if you want to use them:
         // Expand code
