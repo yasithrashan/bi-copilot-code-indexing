@@ -158,16 +158,16 @@ def upsert_chunks():
 @app.route('/search', methods=['POST'])
 def search_chunks():
     """
-    Search for similar chunks
+    Search for similar chunks using top-p filtering
     Body: {
         "query_embedding": [...],  # Query embedding vector
-        "top_k": 5  # Number of results to return
+        "top_p": 0.6   # Cumulative probability threshold (default 0.6)
     }
     """
     try:
         data = request.json
         query_embedding = data.get('query_embedding', [])
-        top_k = data.get('top_k', 5)
+        top_p = data.get('top_p', 0.6)  # Default to 60%
 
         if not query_embedding:
             return jsonify({"success": False, "error": "Missing query_embedding"}), 400
@@ -183,20 +183,44 @@ def search_chunks():
         # Convert query to numpy array
         query_array = np.array([query_embedding], dtype="float32")
 
-        # Search
-        distances, indices = index.search(query_array, min(top_k, index.ntotal))
+        # Search all vectors (we'll filter with top-p)
+        distances, indices = index.search(query_array, index.ntotal)
+
+        # Convert L2 distances to similarity scores
+        # Lower distance = higher similarity
+        scores = [1.0 / (1.0 + float(dist)) for dist in distances[0]]
+
+        # Normalize scores to probabilities
+        total_score = sum(scores)
+        if total_score == 0:
+            return jsonify({
+                "success": True,
+                "results": [],
+                "selected_count": 0,
+                "cumulative_probability": 0.0
+            })
+
+        probabilities = [score / total_score for score in scores]
+
+        # Apply top-p filtering
+        cumulative_prob = 0.0
+        selected_indices = []
+
+        for i, prob in enumerate(probabilities):
+            cumulative_prob += prob
+            selected_indices.append(i)
+            if cumulative_prob >= top_p:
+                break
 
         # Format results
         results = []
-        for dist, idx in zip(distances[0], indices[0]):
+        for i in selected_indices:
+            idx = indices[0][i]
             if idx < len(metadata) and idx >= 0:
                 meta = metadata[idx]
-                # Convert L2 distance to similarity score (inverted)
-                # Lower distance = higher similarity
-                score = 1.0 / (1.0 + float(dist))
-
                 results.append({
-                    "score": score,
+                    "score": scores[i],
+                    "probability": probabilities[i],
                     "payload": {
                         "content": meta.get('content', ''),
                         "metadata": meta.get('metadata', {}),
@@ -207,7 +231,9 @@ def search_chunks():
 
         return jsonify({
             "success": True,
-            "results": results
+            "results": results,
+            "selected_count": len(results),
+            "cumulative_probability": cumulative_prob
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

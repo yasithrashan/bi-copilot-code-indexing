@@ -4,7 +4,7 @@ import type { Chunk, RelevantChunk } from "./types";
 const FAISS_SERVICE_URL = process.env.FAISS_SERVICE_URL || "http://localhost:5001";
 
 /**
- * FAISS Client - Replaces Pinecone client
+ * FAISS Client
  */
 export class FaissClient {
     private baseUrl: string;
@@ -61,7 +61,7 @@ export class FaissClient {
 }
 
 /**
- * Create FAISS client (replaces createPineconeClient)
+ * Create FAISS client
  */
 export function createFaissClient(): FaissClient {
     const client = new FaissClient();
@@ -70,7 +70,7 @@ export function createFaissClient(): FaissClient {
 }
 
 /**
- * Create collection (replaces createCollection)
+ * Create collection
  */
 export async function createCollection(client: FaissClient, dimension: number = 1024): Promise<void> {
     const response = await fetch(`${client['baseUrl']}/create_collection`, {
@@ -89,7 +89,7 @@ export async function createCollection(client: FaissClient, dimension: number = 
 }
 
 /**
- * Upsert chunks to FAISS (replaces upsertChunks)
+ * Upsert chunks to FAISS
  */
 export async function upsertChunks(
     client: FaissClient,
@@ -132,21 +132,35 @@ export async function upsertChunks(
 export async function searchRelevantChunks(
     client: FaissClient,
     queryEmbedding: number[],
-    topK: number = 5
+    topP: number = 0.6,
+    topK: number = 100
 ): Promise<RelevantChunk[]> {
     const response = await fetch(`${client['baseUrl']}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             query_embedding: queryEmbedding,
-            top_k: topK
+            top_k: topK,
+            top_p: topP
         })
     });
 
-    const data = await response.json() as { success?: boolean; error?: string; results?: RelevantChunk[] };
+    const data = await response.json() as {
+        success?: boolean;
+        error?: string;
+        results?: RelevantChunk[];
+        total_candidates?: number;
+        selected_count?: number;
+        cumulative_probability?: number;
+    };
 
     if (!data.success) {
         throw new Error(`Failed to search chunks: ${data.error}`);
+    }
+
+    // Log top-p filtering stats
+    if (data.total_candidates && data.selected_count) {
+        console.log(`Top-P filtering: ${data.selected_count}/${data.total_candidates} chunks selected (cumulative prob: ${data.cumulative_probability?.toFixed(4)})`);
     }
 
     return data.results as RelevantChunk[];

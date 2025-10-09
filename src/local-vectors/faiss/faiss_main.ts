@@ -104,7 +104,7 @@ async function processQueries(
         console.log(`Processing query ${docId}: ${userQuery.query}`);
 
         // Search for relevant chunks using FAISS
-        const relevantChunks = await searchRelevantChunks(faissClient, queryEmbedding, 8);
+        const relevantChunks = await searchRelevantChunks(faissClient, queryEmbedding);
 
         console.log(`Found ${relevantChunks.length} relevant chunks for query ${docId}`);
 
