@@ -11,6 +11,6 @@ if (!balFilePath) throw new Error("BAL_PROJECT_DIRECTORY environment variable is
 if (!voyageApiKey) throw new Error("VOYAGE_API_KEY environment variable is not set.");
 
 
-// await ragPipeline(balFilePath, voyageApiKey, pineconeApiKey);
+await ragPipeline(balFilePath, voyageApiKey, pineconeApiKey);
 // await keywordSearch();
-await agentWorkflow();
+// await agentWorkflow();

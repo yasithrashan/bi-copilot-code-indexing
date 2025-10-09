@@ -20,6 +20,7 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "bun run ./src/index.ts"
+    "start": "bun run ./src/index.ts",
+    "start:local": "bun run ./src/local_index.ts --local"
   }
 }
