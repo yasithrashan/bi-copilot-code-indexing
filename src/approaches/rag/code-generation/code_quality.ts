@@ -89,15 +89,35 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
     Provide your evaluation in the following exact format:
 
     ## User Query
-    [Include the full user query here without any chnages.]
+    [Include the full user query here without any changes.]
 
     ## Chunk Relevance
-    [For each chunk, write: "Chunk N: ✓ Relevant" or "Chunk N: ✗ Not Relevant" followed by one brief sentence explaining why.]
+    [For each chunk, provide:
+    - "Chunk N: ✓ Relevant" or "Chunk N: ✗ Not Relevant"
+    - One brief sentence explaining why it's relevant or not
+    - If relevant, add one sentence describing why this chunk matters for code generation (e.g., "Provides function signature needed" or "Contains error handling pattern required")]
 
     ## Missing Information
+    Note: If the missing information corresponds to a relevant part already present in the code, include the file name and the exact relevant code snippet from it. Do not include any guesses or assumptions — only information that actually exists in the code.
     [List any key information missing that should have been retrieved, or write "None" if the retrieval is complete.]
+    [Include the file path and the relevant code snippet]
 
-    ## Score: [0-100]
+
+    ## Retrieval Metrics
+
+    **Precision**: [X/Y = Z%]
+    (Relevant chunks / Total retrieved chunks)
+    [One sentence: How accurate are the retrieved results?]
+
+    **Recall**: [X/Y = Z%]
+    (Relevant chunks retrieved / Total relevant chunks available in project)
+    [One sentence: How complete is the retrieval?]
+
+    **F1-Score**: [Z%]
+    (Harmonic mean: 2 × (Precision × Recall) / (Precision + Recall))
+    [One sentence: Balanced measure of accuracy and completeness]
+
+    ## Overall Score: [0-100]
 
     Scoring Guide:
     - 90–100: Complete, all relevant
