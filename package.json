@@ -21,6 +21,7 @@
   },
   "scripts": {
     "start": "bun run ./src/index.ts",
-    "start:local": "bun run ./src/local_index.ts --local"
+    "start:local": "bun run ./src/local_index.ts --local",
+    "start:comparison": "bun run ./src/comparison.ts"
   }
 }
