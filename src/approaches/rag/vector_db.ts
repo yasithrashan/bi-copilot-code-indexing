@@ -26,7 +26,7 @@ export async function createCollection(pineconeClient: Pinecone): Promise<void> 
         spec: {
           serverless: {
             cloud: 'aws',
-            region: 'us-east-1' 
+            region: 'us-east-1'
           }
         }
       });
@@ -105,37 +105,73 @@ export async function getCollection(
   }
 }
 
-// Function to search Pinecone for top-k relevant chunks
+// Function to search Pinecone with top-p (nucleus sampling)
 export async function searchRelevantChunks(
   pineconeClient: Pinecone,
   queryEmbedding: number[],
-  limit: number = 8,
-  indexName: string = INDEX_NAME
+  topP: number = 0.6,
+  indexName: string = INDEX_NAME,
+  maxResults: number = 100
 ): Promise<{ score: number; payload: { [key: string]: any; type: string; name: string | null; file: string; line: number; endLine: number; position: { start: { line: number; column: number; }; end: { line: number; column: number; }; }; id: string; hash: string; moduleName?: string; content: string } }[]> {
   const index = pineconeClient.index(indexName);
 
+  // First, get more results than we might need
   const searchResult = await index.query({
     vector: queryEmbedding,
-    topK: limit,
+    topK: maxResults,
     includeMetadata: true,
   });
 
-  // Map the results to match your expected format
-  return searchResult.matches?.map((match) => ({
-    score: match.score ?? 0,
-    payload: {
-      content: match.metadata?.content as string,
-      type: (match.metadata as any)?.type as string,
-      name: (match.metadata as any)?.name ?? null,
-      file: match.metadata?.file as string,
-      line: match.metadata?.line as number,
-      endLine: match.metadata?.endLine as number,
-      position: (match.metadata as any)?.position ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-      id: match.metadata?.chunkId as string,
-      hash: match.metadata?.hash as string,
-      moduleName: match.metadata?.moduleName as string | undefined,
-    },
-  })) || [];
+  // Map and sort results by score (descending)
+  const allResults = (searchResult.matches?.map((match) => {
+    if (!match.metadata) return null;
+
+    return {
+      score: match.score ?? 0,
+      payload: {
+        content: (match.metadata.content as string) ?? "",
+        type: ((match.metadata as any).type as string) ?? "",
+        name: ((match.metadata as any).name as string | null) ?? null,
+        file: (match.metadata.file as string) ?? "",
+        line: (match.metadata.line as number) ?? 0,
+        endLine: (match.metadata.endLine as number) ?? 0,
+        position: ((match.metadata as any).position) ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+        id: (match.metadata.chunkId as string) ?? "",
+        hash: (match.metadata.hash as string) ?? "",
+        moduleName: (match.metadata.moduleName as string | undefined),
+      },
+    };
+  }).filter((result): result is NonNullable<typeof result> => result !== null) || []).sort((a, b) => b.score - a.score);
+
+  if (allResults.length === 0) {
+    return [];
+  }
+
+  // Normalize scores to probabilities (softmax)
+  const maxScore = allResults[0]!.score;
+  const expScores = allResults.map(r => Math.exp(r.score - maxScore));
+  const sumExpScores = expScores.reduce((sum, val) => sum + val, 0);
+  const probabilities = expScores.map(exp => exp / sumExpScores);
+
+  // Apply top-p filtering
+  let cumulativeProb = 0;
+  const selectedResults = [];
+
+  for (let i = 0; i < allResults.length; i++) {
+    const prob = probabilities[i];
+    if (prob !== undefined) {
+      cumulativeProb += prob;
+      selectedResults.push(allResults[i]!);
+
+      if (cumulativeProb >= topP) {
+        break;
+      }
+    }
+  }
+
+  console.log(`Top-p (${topP}) selected ${selectedResults.length} chunks from ${allResults.length} total results`);
+
+  return selectedResults;
 }
 
 // Optional: Delete index (for cleanup)
