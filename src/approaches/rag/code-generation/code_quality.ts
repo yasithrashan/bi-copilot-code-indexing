@@ -6,7 +6,6 @@ import type { RelevantChunk } from "../types";
 
 interface QualityEvaluatorParams {
   chunksFilePath: string;
-  expandedCodeFilePath: string;
   projectPath: string;
   outputDir?: string;
   docId?: number;
@@ -98,10 +97,24 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
     - If relevant, add one sentence describing why this chunk matters for code generation (e.g., "Provides function signature needed" or "Contains error handling pattern required")]
 
     ## Missing Information
-    Note: If the missing information corresponds to a relevant part already present in the code, include the file name and the exact relevant code snippet from it. Do not include any guesses or assumptions — only information that actually exists in the code.
-    [List any key information missing that should have been retrieved, or write "None" if the retrieval is complete.]
-    [Include the file path and the relevant code snippet]
+    IMPORTANT: This section is for identifying code that ALREADY EXISTS in the project_file_content but was NOT retrieved in the chunks.
 
+    Do NOT suggest code that doesn't exist yet or logic that needs to be created.
+    Only identify existing code snippets from the source files that should have been retrieved but weren't.
+
+    [For each missing piece:
+    - Describe what information is missing
+    - Provide the exact file path where it exists
+    - Provide the line number(s) or line range
+    - Include the actual code snippet from the source
+
+    If nothing relevant is missing from retrieval, write "None - All relevant existing code was retrieved"]
+
+    Example format:
+    - Missing: [Description of what's missing]
+      File: \`path/to/file.bal\`
+      Lines: 45-52
+      [actual code snippet]
 
     ## Retrieval Metrics
 
@@ -120,16 +133,18 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
     ## Overall Score: [0-100]
 
     Scoring Guide:
-    - 90–100: Complete, all relevant
-    - 70–89: Minor gaps
-    - 50–69: Some missing info
-    - 30–49: Major gaps
-    - 0–29: Mostly irrelevant
+    - 90–100: Complete, all relevant existing code retrieved
+    - 70–89: Minor gaps, some relevant code not retrieved
+    - 50–69: Significant existing code missing from retrieval
+    - 30–49: Major gaps, much relevant code not retrieved
+    - 0–29: Most relevant existing code not retrieved
 
     The score must reflect how well the retrieved chunks enable the LLM to generate accurate and complete code that fulfills the user query.
 
     Keep your response concise, factual, and free of unnecessary text.
   `;
+
+
 
     // Generate evaluation using Claude
     const { text } = await generateText({

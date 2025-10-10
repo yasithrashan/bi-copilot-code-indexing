@@ -107,7 +107,6 @@ async function processQueries(
         // Evaluate code quality
         await evaluateRelevantChunksQuality({
             chunksFilePath: jsonPath,
-            expandedCodeFilePath: path.join(expandOutputDir, `${docId}.md`),
             projectPath: ballerinaDir,
             outputDir: path.join('outputs/rag_outputs', 'quality_evaluation'),
             docId
