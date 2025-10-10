@@ -38,3 +38,4 @@ ballerina/
 api_docs/
 excel.xlsx
 outputs/
+vector_database.db
