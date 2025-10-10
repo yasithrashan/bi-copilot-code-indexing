@@ -23,28 +23,33 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
   const pineconeFile = path.join(pineconeResultsDir, `${docId}.md`);
   const faissFile = path.join(faissResultsDir, `${docId}.md`);
 
+  // Validation with clear logging
+  console.log(`\nStarting RAG Comparison for Document ID: ${docId}`);
+
   if (!fs.existsSync(pineconeFile)) {
-    throw new Error(`Pinecone evaluation file not found: ${pineconeFile}`);
+    throw new Error(`Pinecone file not found: ${pineconeFile}`);
   }
-
   if (!fs.existsSync(faissFile)) {
-    throw new Error(`FAISS evaluation file not found: ${faissFile}`);
+    throw new Error(`FAISS file not found: ${faissFile}`);
   }
-
   if (!fs.existsSync(projectPath)) {
     throw new Error(`Project path not found: ${projectPath}`);
   }
 
+  console.log(`[OK] Found evaluation files`);
+
   try {
-    // Read both evaluation files
+    // Read evaluation files
     const pineconeEval = fs.readFileSync(pineconeFile, "utf-8");
     const faissEval = fs.readFileSync(faissFile, "utf-8");
 
-    // Read all .bal files in project directory
+    // Read project files
     const balFiles = fs.readdirSync(projectPath).filter((f) => f.endsWith(".bal"));
     if (balFiles.length === 0) {
-      throw new Error("No .bal files found in project path.");
+      throw new Error("No .bal files found in project path");
     }
+
+    console.log(`[OK] Loaded ${balFiles.length} project file(s)`);
 
     let projectContent = "## Complete Project Source Files\n\n";
     for (const file of balFiles) {
@@ -53,134 +58,93 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
       projectContent += `### File: ${file}\n\n\`\`\`ballerina\n${content}\n\`\`\`\n\n`;
     }
 
-    // Extract metrics for summary
+    // Extract metrics
     const pineconeMetrics = extractMetrics(pineconeEval);
     const faissMetrics = extractMetrics(faissEval);
 
-    // Create comprehensive comparison prompt
-    const systemPrompt = `
-You are an expert evaluator comparing two RAG (Retrieval-Augmented Generation) systems: Pinecone and FAISS.
+    console.log(`[OK] Extracted metrics - Pinecone: ${pineconeMetrics.overallScore}/100, FAISS: ${faissMetrics.overallScore}/100`);
+    console.log(`[Processing] Generating comparison analysis...`);
 
-Your task is to analyze the code quality evaluation results from both systems and determine which one performs better for code generation tasks.
+    // Streamlined system prompt
+    const systemPrompt = `You are a RAG system evaluator. Compare Pinecone vs FAISS for code retrieval.
 
-You have access to:
-1. The complete project source code
-2. Pinecone's evaluation results (what it retrieved and how relevant it was)
-3. FAISS's evaluation results (what it retrieved and how relevant it was)
+Analyze:
+- Retrieval metrics (precision, recall, F1)
+- Chunk relevance for code generation
+- Missing information (verify against source code)
 
-Focus on:
-- Retrieval quality (precision, recall, F1-score)
-- Relevance of retrieved chunks for code generation
-- Completeness of information
-- Missing information analysis (verify against actual source code)
-- Overall capability to support accurate code generation
+Be concise, data-driven, and actionable. Use the exact format requested.`;
 
-Provide a clear, data-driven comparison with actionable insights.
-`;
-
+    // Simplified user prompt
     const userPrompt = `
-Analyze and compare the following RAG system evaluations for Document ID: ${docId}
+Compare RAG evaluations for Document ID: ${docId}
 
 ${projectContent}
 
 ---
 
-## Pinecone Evaluation Results
-
+## Pinecone Results
 ${pineconeEval}
 
 ---
 
-## FAISS Evaluation Results
-
+## FAISS Results
 ${faissEval}
 
 ---
 
-Please provide your analysis in the following format:
+**Output Format:**
 
-# RAG System Comparison Report
-**Document ID:** ${docId}
+# RAG Comparison: Doc ${docId}
 **Date:** ${new Date().toISOString().split('T')[0]}
 
-## Executive Summary
-[2-3 sentences on which system performed better overall and why]
+## Summary
+[2 sentences: Which system won and why]
 
-## Metrics Comparison Table
+## Metrics
 
 | Metric | Pinecone | FAISS | Winner |
 |--------|----------|-------|--------|
-| Overall Score | ${pineconeMetrics.overallScore}/100 | ${faissMetrics.overallScore}/100 | [Pinecone/FAISS] |
-| Precision | ${pineconeMetrics.precision}% | ${faissMetrics.precision}% | [Pinecone/FAISS] |
-| Recall | ${pineconeMetrics.recall}% | ${faissMetrics.recall}% | [Pinecone/FAISS] |
-| F1-Score | ${pineconeMetrics.f1Score}% | ${faissMetrics.f1Score}% | [Pinecone/FAISS] |
-| Relevant Chunks | ${pineconeMetrics.relevantChunks}/${pineconeMetrics.totalChunks} | ${faissMetrics.relevantChunks}/${faissMetrics.totalChunks} | [Pinecone/FAISS] |
+| Overall | ${pineconeMetrics.overallScore}/100 | ${faissMetrics.overallScore}/100 | ? |
+| Precision | ${pineconeMetrics.precision}% | ${faissMetrics.precision}% | ? |
+| Recall | ${pineconeMetrics.recall}% | ${faissMetrics.recall}% | ? |
+| F1-Score | ${pineconeMetrics.f1Score}% | ${faissMetrics.f1Score}% | ? |
+| Relevant | ${pineconeMetrics.relevantChunks}/${pineconeMetrics.totalChunks} | ${faissMetrics.relevantChunks}/${faissMetrics.totalChunks} | ? |
 
-## Detailed Analysis
+## Analysis
 
-### Retrieval Quality
-[Compare precision, recall, and F1-scores. Which system retrieved more relevant chunks? Which had better accuracy?]
+**Retrieval Quality:** [2-3 sentences comparing metrics]
 
-### Chunk Relevance for Code Generation
-[Analyze the quality and relevance of chunks retrieved by each system. Which provided more actionable code snippets that would help an LLM generate correct code?]
+**Chunk Relevance:** [2-3 sentences on code generation utility]
 
-### Missing Information Analysis
-[IMPORTANT: Cross-reference the "Missing Information" sections with the actual project source code provided above]
-- **Pinecone Missing:** [List what Pinecone missed and verify if it actually exists in the source code]
-- **FAISS Missing:** [List what FAISS missed and verify if it actually exists in the source code]
-- **Impact:** [Which system's missing information is more critical for code generation?]
+**Missing Info:**
+- Pinecone missed: [verify against source]
+- FAISS missed: [verify against source]
+- Impact: [which is more critical?]
 
-### Source Code Verification
-[Based on the complete project source code, verify the claims made in both evaluations. Are the missing information lists accurate? Did either system retrieve chunks that aren't actually relevant when you look at the full context?]
+## Verdict
 
-## Winner: [Pinecone | FAISS | Tie]
+**Winner:** [Pinecone/FAISS/Tie]
 
-### Reasoning
-[Provide 3-5 bullet points explaining why one system outperformed the other, or why it's a tie. Reference specific examples from the source code.]
+**Why:** [3 concise bullet points with source code references]
 
-## Recommendations
+**Recommendation:** [1 sentence on which to use for similar queries]
 
-### For This Query Type
-[Which system should be used for similar queries and why?]
-
-### System Improvements
-**Pinecone:**
-[Specific suggestions to improve Pinecone's performance]
-
-**FAISS:**
-[Specific suggestions to improve FAISS's performance]
-
-### Patterns Observed
-[Any patterns that could inform future optimizations]
-
-## Final Verdict
-
-**Winner:** [Pinecone/FAISS]
-**Confidence:** [High/Medium/Low]
-**Performance Gap:** ${Math.abs(pineconeMetrics.overallScore - faissMetrics.overallScore)} points
-
-**Key Takeaway:**
-[One sentence summary of the most important finding]
+**Key Insight:** [1 sentence takeaway]
 
 ---
-
-Keep the analysis objective, data-driven, and focused on practical implications for code generation quality.
+Keep it brief, clear, and actionable.
 `;
 
-    // Generate comparison using Claude
+    // Generate comparison
     const { text } = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
       system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-      maxOutputTokens: 4096,
+      messages: [{ role: "user", content: userPrompt }],
+      maxOutputTokens: 2048,
     });
 
-    // Save comparison report
+    // Save report
     const outputDirPath = path.resolve(outputDir);
     if (!fs.existsSync(outputDirPath)) {
       fs.mkdirSync(outputDirPath, { recursive: true });
@@ -189,25 +153,35 @@ Keep the analysis objective, data-driven, and focused on practical implications 
     const outputPath = path.join(outputDirPath, `comparison_${docId}.md`);
     fs.writeFileSync(outputPath, text, "utf-8");
 
-    console.log(`\n${"=".repeat(70)}`);
-    console.log(`RAG System Comparison Complete!`);
-    console.log(`${"=".repeat(70)}`);
-    console.log(`Document ID: ${docId}`);
-    console.log(`Pinecone Score: ${pineconeMetrics.overallScore}/100`);
-    console.log(`FAISS Score: ${faissMetrics.overallScore}/100`);
-    console.log(`Winner: ${pineconeMetrics.overallScore > faissMetrics.overallScore ? "Pinecone" : faissMetrics.overallScore > pineconeMetrics.overallScore ? "FAISS" : "Tie"}`);
-    console.log(`Report saved to: ${outputPath}`);
-    console.log(`${"=".repeat(70)}\n`);
+    // Clean, informative console output
+    const winner =
+      pineconeMetrics.overallScore > faissMetrics.overallScore ? "Pinecone" :
+        faissMetrics.overallScore > pineconeMetrics.overallScore ? "FAISS" :
+          "Tie";
+
+    const gap = Math.abs(pineconeMetrics.overallScore - faissMetrics.overallScore);
+
+    console.log(`\n${"═".repeat(60)}`);
+    console.log(`  RAG COMPARISON RESULTS`);
+    console.log(`${"═".repeat(60)}`);
+    console.log(`  Document ID:  ${docId}`);
+    console.log(`  Winner:       ${winner} ${winner !== "Tie" ? `(+${gap} points)` : ""}`);
+    console.log(`${"─".repeat(60)}`);
+    console.log(`  Pinecone:     ${pineconeMetrics.overallScore}/100 (P:${pineconeMetrics.precision}% R:${pineconeMetrics.recall}% F1:${pineconeMetrics.f1Score}%)`);
+    console.log(`  FAISS:        ${faissMetrics.overallScore}/100 (P:${faissMetrics.precision}% R:${faissMetrics.recall}% F1:${faissMetrics.f1Score}%)`);
+    console.log(`${"─".repeat(60)}`);
+    console.log(`  Report:    ${outputPath}`);
+    console.log(`${"═".repeat(60)}\n`);
 
     return outputPath;
   } catch (error) {
-    console.error("Failed to compare RAG systems:", error);
+    console.error(`\n[ERROR] Comparison failed:`, error);
     throw error;
   }
 }
 
 /**
- * Extract metrics from evaluation markdown file
+ * Extract metrics from evaluation markdown
  */
 function extractMetrics(evalText: string): {
   precision: number;
@@ -226,13 +200,9 @@ function extractMetrics(evalText: string): {
     totalChunks: 0,
   };
 
-  // Extract Overall Score
   const scoreMatch = evalText.match(/##\s*Overall Score:\s*(\d+)/i);
-  if (scoreMatch) {
-    metrics.overallScore = parseInt(scoreMatch[1] ?? "0", 10);
-  }
+  if (scoreMatch) metrics.overallScore = parseInt(scoreMatch[1] ?? "0", 10);
 
-  // Extract Precision
   const precisionMatch = evalText.match(/\*\*Precision\*\*:\s*(\d+)\/(\d+)\s*=\s*([\d.]+)%/i);
   if (precisionMatch) {
     metrics.relevantChunks = parseInt(precisionMatch[1] ?? "0", 10);
@@ -240,17 +210,11 @@ function extractMetrics(evalText: string): {
     metrics.precision = parseFloat(precisionMatch[3] ?? "0");
   }
 
-  // Extract Recall
   const recallMatch = evalText.match(/\*\*Recall\*\*:.*?([\d.]+)%/i);
-  if (recallMatch) {
-    metrics.recall = parseFloat(recallMatch[1] ?? "0");
-  }
+  if (recallMatch) metrics.recall = parseFloat(recallMatch[1] ?? "0");
 
-  // Extract F1-Score
   const f1Match = evalText.match(/\*\*F1-Score\*\*:.*?([\d.]+)%/i);
-  if (f1Match) {
-    metrics.f1Score = parseFloat(f1Match[1] ?? "0");
-  }
+  if (f1Match) metrics.f1Score = parseFloat(f1Match[1] ?? "0");
 
   return metrics;
 }
