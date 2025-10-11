@@ -1,5 +1,5 @@
 import { faissPipeline } from "./local-vectors/faiss/faiss_main";
-import { sqlitePipeline } from "./local-vectors/sqlite/sqlite_vectordb";
+import { sqlitePipeline } from "./local-vectors/sqlite/sqlite_main";
 
 const balFilePath = process.env.BAL_PROJECT_DIRECTORY;
 const voyageApiKey = process.env.VOYAGE_API_KEY;

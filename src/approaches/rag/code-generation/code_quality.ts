@@ -68,10 +68,42 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
 
     // Focused system prompt
     const systemPrompt = `
-    You are evaluating the retrieval quality in a RAG system. Assess how well the retrieved chunks align with and support the user query.
+    You are evaluating retrieval quality in a RAG system designed for Ballerina code generation.
 
-    This evaluation is specifically for code generation, where the retrieved chunks are provided to the LLM to generate code.
-    Your task is to determine whether these chunks are relevant and sufficient for the LLM to successfully fulfill the user's request.
+    Your task: Determine if the retrieved chunks contain the essential Ballerina code elements needed for an LLM to successfully generate code that fulfills the user's request.
+
+    ## What "Relevant" Means
+
+    A chunk is RELEVANT if removing it would cause the code generation to fail or produce incorrect code.
+
+    **Relevant chunks contain:**
+    - Service definitions, resource functions, or HTTP endpoints referenced in the query
+    - Record types, object definitions, or type descriptors needed for the task
+    - Client implementations (HTTP, database, external services) that must be used
+    - Module imports and their usage patterns (ballerina/http, ballerina/sql, etc.)
+    - Specific functions, variables, or constants that need to be called or referenced
+    - Error handling patterns, custom error types required for the implementation
+    - Configuration patterns (configurable variables, TOML usage) needed
+    - Data transformation logic or query expressions relevant to the task
+    - Ballerina-specific idioms (check expressions, isolated functions, transactions)
+
+    **NOT relevant chunks contain:**
+    - Code unrelated to the current task
+    - Generic information that doesn't provide implementation details
+    - Duplicate or redundant information already in other chunks
+
+    ## Critical Understanding
+
+    **Retrieval vs. Codebase Gaps:**
+    - If functionality doesn't exist in the project → NOT a retrieval problem
+    - If functionality exists but wasn't retrieved → IS a retrieval problem
+    - Only evaluate retrieval effectiveness, NOT codebase completeness
+
+    You have access to the full project content. Use it to identify what exists vs. what was retrieved.
+
+    ---
+
+    ## Input Data
 
     <user_query>
     ${userQuery}
@@ -85,66 +117,82 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
     ${chunksContext}
     </retrieved_chunks>
 
-    Provide your evaluation in the following exact format:
+    ---
 
-    ## User Query
-    [Include the full user query here without any changes.]
+    ## Required Output Format
 
-    ## Chunk Relevance
-    [For each chunk, provide:
-    - "Chunk N: ✓ Relevant" or "Chunk N: ✗ Not Relevant"
-    - One brief sentence explaining why it's relevant or not
-    - If relevant, add one sentence describing why this chunk matters for code generation (e.g., "Provides function signature needed" or "Contains error handling pattern required")]
+    ### 1. User Query
+    [Repeat the user query exactly as provided]
 
-    ## Missing Information
-    IMPORTANT: This section is for identifying code that ALREADY EXISTS in the project_file_content but was NOT retrieved in the chunks.
+    ### 2. Chunk Relevance Analysis
+    For each retrieved chunk:
 
-    Do NOT suggest code that doesn't exist yet or logic that needs to be created.
-    Only identify existing code snippets from the source files that should have been retrieved but weren't.
+    **Chunk N: [✓ Relevant | ✗ Not Relevant]**
+    - Why: [One sentence explaining relevance]
+    - Impact: [If relevant: one sentence on how this enables code generation]
 
-    [For each missing piece:
-    - Describe what information is missing
-    - Provide the exact file path where it exists
-    - Provide the line number(s) or line range
-    - Include the actual code snippet from the source
+    Example:
+    **Chunk 1: ✓ Relevant**
+    - Why: Contains the UserRecord type definition referenced in the query
+    - Impact: Provides the exact structure needed for database operations
 
-    If nothing relevant is missing from retrieval, write "None - All relevant existing code was retrieved"]
+    **Chunk 2: ✗ Not Relevant**
+    - Why: Defines authentication logic unrelated to the data retrieval task
 
-    Example format:
-    - Missing: [Description of what's missing]
-      File: \`path/to/file.bal\`
-      Lines: 45-52
-      [actual code snippet]
+    ### 3. Missing Information
 
-    ## Retrieval Metrics
+    **IMPORTANT RULES:**
+    - ONLY identify code that EXISTS in project_file_content but is MISSING from retrieved_chunks
+    - DO NOT suggest new code, future implementations, or "should be created" items
+    - DO NOT mention functionality that doesn't exist in the codebase
+    - Provide exact file paths, line numbers, and code snippets from the project
 
-    **Precision**: [X/Y = Z%]
-    (Relevant chunks / Total retrieved chunks)
-    [One sentence: How accurate are the retrieved results?]
+    Format for each missing item:
 
-    **Recall**: [X/Y = Z%]
-    (Relevant chunks retrieved / Total relevant chunks available in project)
-    [One sentence: How complete is the retrieval?]
+    - Missing: [Brief description]
+      File: path/to/file.bal
+      Lines: X-Y
+      Code:
+        [exact code snippet from project_file_content]
+      Reason: [Why this was needed for the task]
 
-    **F1-Score**: [Z%]
-    (Harmonic mean: 2 × (Precision × Recall) / (Precision + Recall))
-    [One sentence: Balanced measure of accuracy and completeness]
+    If nothing is missing: **"None - All relevant existing code was retrieved"**
 
-    ## Overall Score: [0-100]
+    ### 4. Retrieval Metrics
 
-    Scoring Guide:
-    - 90–100: Complete, all relevant existing code retrieved
-    - 70–89: Minor gaps, some relevant code not retrieved
-    - 50–69: Significant existing code missing from retrieval
-    - 30–49: Major gaps, much relevant code not retrieved
-    - 0–29: Most relevant existing code not retrieved
+    **Precision: X/Y = Z%**
+    (Relevant chunks retrieved / Total chunks retrieved)
+    Meaning: [One sentence on accuracy]
 
-    The score must reflect how well the retrieved chunks enable the LLM to generate accurate and complete code that fulfills the user query.
+    **Recall: X/Y = Z%**
+    (Relevant chunks retrieved / Total relevant chunks in project)
+    Meaning: [One sentence on completeness]
 
-    Keep your response concise, factual, and free of unnecessary text.
+    **F1-Score: Z%**
+    (2 × (Precision × Recall) / (Precision + Recall))
+    Meaning: [One sentence on balanced performance]
+
+    ### 5. Overall Retrieval Score: [0-100]
+
+    **Scoring Rubric:**
+    - **90-100**: Excellent - All necessary code retrieved, LLM can generate complete solution
+    - **70-89**: Good - Minor gaps, but core functionality retrieved
+    - **50-69**: Fair - Significant gaps, missing important code elements
+    - **30-49**: Poor - Major gaps, much relevant code not retrieved
+    - **0-29**: Very Poor - Critical code missing, generation likely to fail
+
+    **Score Justification:** [2-3 sentences explaining the score based on what was/wasn't retrieved]
+
+    ---
+
+    ## Guidelines
+
+    - Be precise and factual
+    - Use code-specific terminology
+    - Focus on retrieval quality, not code quality
+    - Base metrics on actual project content analysis
+    - Keep explanations concise but informative
   `;
-
-
 
     // Generate evaluation using Claude
     const { text } = await generateText({
