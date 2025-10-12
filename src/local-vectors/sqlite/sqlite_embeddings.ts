@@ -22,7 +22,7 @@ export async function getEmbeddings(
         throw new Error(`VoyageAI API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
     const rawData = await response.json();
-    const dir = 'outputs/faiss_outputs/codebase_embedding';
+    const dir = 'outputs/sqlite_outputs/codebase_embedding';
     fs.mkdirSync(dir, { recursive: true })
 
     fs.writeFileSync(`${dir}/embedding_response.json`, JSON.stringify(rawData, null, 2), 'utf8');

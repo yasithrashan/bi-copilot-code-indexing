@@ -699,7 +699,7 @@ export class BallerinaChunker {
     }
 
     saveChunksToJson(chunks: EnhancedChunk[], ballerinaDir: string): string {
-        const testsDir = "outputs/faiss_outputs/codebase_chunks";
+        const testsDir = "outputs/sqlite_outputs/codebase_chunks";
         mkdirSync(testsDir, { recursive: true });
         const filename = `chunks.json`;
         const filepath = path.join(testsDir, filename);
