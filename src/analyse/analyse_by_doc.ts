@@ -8,6 +8,7 @@ interface ComparatorParams {
   projectPath: string;
   pineconeResultsDir?: string;
   faissResultsDir?: string;
+  sqliteResultsDir?: string;
   outputDir?: string;
 }
 
@@ -17,11 +18,13 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
     projectPath,
     pineconeResultsDir = "outputs/rag_outputs/quality_evaluation",
     faissResultsDir = "outputs/faiss_outputs/quality_evaluation",
+    sqliteResultsDir = "outputs/sqlite_outputs/quality_evaluation",
     outputDir = "outputs/rag_comparison_results",
   } = params;
 
   const pineconeFile = path.join(pineconeResultsDir, `${docId}.md`);
   const faissFile = path.join(faissResultsDir, `${docId}.md`);
+  const sqliteFile = path.join(sqliteResultsDir, `${docId}.md`);
 
   // Validation with clear logging
   console.log(`\nStarting RAG Comparison for Document ID: ${docId}`);
@@ -31,6 +34,9 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
   }
   if (!fs.existsSync(faissFile)) {
     throw new Error(`FAISS file not found: ${faissFile}`);
+  }
+  if (!fs.existsSync(sqliteFile)) {
+    throw new Error(`SQLite file not found: ${sqliteFile}`);
   }
   if (!fs.existsSync(projectPath)) {
     throw new Error(`Project path not found: ${projectPath}`);
@@ -42,6 +48,7 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
     // Read evaluation files
     const pineconeEval = fs.readFileSync(pineconeFile, "utf-8");
     const faissEval = fs.readFileSync(faissFile, "utf-8");
+    const sqliteEval = fs.readFileSync(sqliteFile, "utf-8");
 
     // Read project files
     const balFiles = fs.readdirSync(projectPath).filter((f) => f.endsWith(".bal"));
@@ -61,17 +68,19 @@ export async function compareRAGSystems(params: ComparatorParams): Promise<strin
     // Extract metrics
     const pineconeMetrics = extractMetrics(pineconeEval);
     const faissMetrics = extractMetrics(faissEval);
+    const sqliteMetrics = extractMetrics(sqliteEval);
 
-    console.log(`[OK] Extracted metrics - Pinecone: ${pineconeMetrics.overallScore}/100, FAISS: ${faissMetrics.overallScore}/100`);
+    console.log(`[OK] Extracted metrics - Pinecone: ${pineconeMetrics.overallScore}/100, FAISS: ${faissMetrics.overallScore}/100, SQLite: ${sqliteMetrics.overallScore}/100`);
     console.log(`[Processing] Generating comparison analysis...`);
 
     // Streamlined system prompt
-    const systemPrompt = `You are a RAG system evaluator. Compare Pinecone vs FAISS for code retrieval.
+    const systemPrompt = `You are a RAG system evaluator. Compare Pinecone vs FAISS vs SQLite for code retrieval.
 
 Analyze:
 - Retrieval metrics (precision, recall, F1)
 - Chunk relevance for code generation
 - Missing information (verify against source code)
+- System-specific strengths/weaknesses
 
 Be concise, data-driven, and actionable. Use the exact format requested.`;
 
@@ -93,6 +102,11 @@ ${faissEval}
 
 ---
 
+## SQLite Results
+${sqliteEval}
+
+---
+
 **Output Format:**
 
 # RAG Comparison: Doc ${docId}
@@ -103,28 +117,37 @@ ${faissEval}
 
 ## Metrics
 
-| Metric | Pinecone | FAISS | Winner |
-|--------|----------|-------|--------|
-| Overall | ${pineconeMetrics.overallScore}/100 | ${faissMetrics.overallScore}/100 | ? |
-| Precision | ${pineconeMetrics.precision}% | ${faissMetrics.precision}% | ? |
-| Recall | ${pineconeMetrics.recall}% | ${faissMetrics.recall}% | ? |
-| F1-Score | ${pineconeMetrics.f1Score}% | ${faissMetrics.f1Score}% | ? |
-| Relevant | ${pineconeMetrics.relevantChunks}/${pineconeMetrics.totalChunks} | ${faissMetrics.relevantChunks}/${faissMetrics.totalChunks} | ? |
+| Metric | Pinecone | FAISS | SQLite | Winner |
+|--------|----------|-------|--------|--------|
+| Overall | ${pineconeMetrics.overallScore}/100 | ${faissMetrics.overallScore}/100 | ${sqliteMetrics.overallScore}/100 | ? |
+| Precision | ${pineconeMetrics.precision}% | ${faissMetrics.precision}% | ${sqliteMetrics.precision}% | ? |
+| Recall | ${pineconeMetrics.recall}% | ${faissMetrics.recall}% | ${sqliteMetrics.recall}% | ? |
+| F1-Score | ${pineconeMetrics.f1Score}% | ${faissMetrics.f1Score}% | ${sqliteMetrics.f1Score}% | ? |
+| Relevant | ${pineconeMetrics.relevantChunks}/${pineconeMetrics.totalChunks} | ${faissMetrics.relevantChunks}/${faissMetrics.totalChunks} | ${sqliteMetrics.relevantChunks}/${sqliteMetrics.totalChunks} | ? |
 
 ## Analysis
 
-**Retrieval Quality:** [2-3 sentences comparing metrics]
+**Retrieval Quality:** [2-3 sentences comparing metrics across all three systems]
 
-**Chunk Relevance:** [2-3 sentences on code generation utility]
+**Chunk Relevance:** [2-3 sentences on code generation utility for each system]
 
 **Missing Info:**
 - Pinecone missed: [verify against source]
 - FAISS missed: [verify against source]
-- Impact: [which is more critical?]
+- SQLite missed: [verify against source]
+- Impact: [which is most critical?]
+
+## System Characteristics
+
+**Pinecone:** [1-2 sentences on performance characteristics]
+
+**FAISS:** [1-2 sentences on performance characteristics]
+
+**SQLite:** [1-2 sentences on performance characteristics]
 
 ## Verdict
 
-**Winner:** [Pinecone/FAISS/Tie]
+**Winner:** [Pinecone/FAISS/SQLite/Tie]
 
 **Why:** [3 concise bullet points with source code references]
 
@@ -154,24 +177,28 @@ Keep it brief, clear, and actionable.
     fs.writeFileSync(outputPath, text, "utf-8");
 
     // Clean, informative console output
-    const winner =
-      pineconeMetrics.overallScore > faissMetrics.overallScore ? "Pinecone" :
-        faissMetrics.overallScore > pineconeMetrics.overallScore ? "FAISS" :
-          "Tie";
+    const scores = [
+      { name: "Pinecone", score: pineconeMetrics.overallScore },
+      { name: "FAISS", score: faissMetrics.overallScore },
+      { name: "SQLite", score: sqliteMetrics.overallScore },
+    ];
+    scores.sort((a, b) => b.score - a.score);
 
-    const gap = Math.abs(pineconeMetrics.overallScore - faissMetrics.overallScore);
+    const winner = scores.length > 0 && scores[0]?.name ? scores[0].name : "N/A";
+    const gap = (scores.length > 1 && scores[1]?.score !== undefined && scores[0]?.score !== undefined) ? scores[0].score - scores[1].score! : 0;
 
-    console.log(`\n${"═".repeat(60)}`);
+    console.log(`\n${"═".repeat(70)}`);
     console.log(`  RAG COMPARISON RESULTS`);
-    console.log(`${"═".repeat(60)}`);
+    console.log(`${"═".repeat(70)}`);
     console.log(`  Document ID:  ${docId}`);
-    console.log(`  Winner:       ${winner} ${winner !== "Tie" ? `(+${gap} points)` : ""}`);
-    console.log(`${"─".repeat(60)}`);
+    console.log(`  Winner:       ${winner} ${gap > 0 ? `(+${gap} points)` : ""}`);
+    console.log(`${"─".repeat(70)}`);
     console.log(`  Pinecone:     ${pineconeMetrics.overallScore}/100 (P:${pineconeMetrics.precision}% R:${pineconeMetrics.recall}% F1:${pineconeMetrics.f1Score}%)`);
     console.log(`  FAISS:        ${faissMetrics.overallScore}/100 (P:${faissMetrics.precision}% R:${faissMetrics.recall}% F1:${faissMetrics.f1Score}%)`);
-    console.log(`${"─".repeat(60)}`);
+    console.log(`  SQLite:       ${sqliteMetrics.overallScore}/100 (P:${sqliteMetrics.precision}% R:${sqliteMetrics.recall}% F1:${sqliteMetrics.f1Score}%)`);
+    console.log(`${"─".repeat(70)}`);
     console.log(`  Report:    ${outputPath}`);
-    console.log(`${"═".repeat(60)}\n`);
+    console.log(`${"═".repeat(70)}\n`);
 
     return outputPath;
   } catch (error) {

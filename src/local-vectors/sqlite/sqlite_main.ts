@@ -6,7 +6,7 @@ import { initDB, upsertChunks, searchRelevantChunks, getDBStats } from "./sqlite
 import { GetUserQuery } from "../../shared/queries";
 import fs from 'fs/promises';
 import path from "path";
-import { evaluateRelevantChunksQuality } from "./sqlitr_code_quality";
+import { evaluateRelevantChunksQuality } from "./sqlite_code_quality";
 
 /** Load and chunk all Ballerina files */
 async function loadAndChunkFiles(ballerinaDir: string, chunker: BallerinaChunker): Promise<Chunk[]> {

@@ -98,11 +98,11 @@ async function processQueries(
         await fs.writeFile(mdPath, mdContent);
 
         // Expand code
-        const expandOutputDir = path.join('outputs/rag_outputs', 'expand_code');
-        await expandCode({ chunksFilePath: jsonPath, projectPath: ballerinaDir, outputDir: expandOutputDir, docId });
+        // const expandOutputDir = path.join('outputs/rag_outputs', 'expand_code');
+        // await expandCode({ chunksFilePath: jsonPath, projectPath: ballerinaDir, outputDir: expandOutputDir, docId });
 
         // Generate code
-        await processCodeGenerationForQuery(docId, userQuery.query);
+        // await processCodeGenerationForQuery(docId, userQuery.query);
 
         // Evaluate code quality
         await evaluateRelevantChunksQuality({

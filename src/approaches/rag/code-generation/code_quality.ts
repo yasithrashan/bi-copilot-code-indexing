@@ -68,42 +68,17 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
 
     // Focused system prompt
     const systemPrompt = `
-    You are evaluating retrieval quality in a RAG system designed for Ballerina code generation.
+    You are evaluating the retrieval quality in a RAG system using SQLite vector search with top-p (nucleus sampling).
 
-    Your task: Determine if the retrieved chunks contain the essential Ballerina code elements needed for an LLM to successfully generate code that fulfills the user's request.
+    CRITICAL CONTEXT: "Relevance" means the retrieved chunks would help an LLM generate code to fulfill the user's request.
+    These chunks are passed as context to a code generation LLM as an input. A chunk is relevant if it contains:
+        - Missing chunks that are already in the code base and not captured that are related to the user query
+        - A chunk is NOT relevant if it contains unrelated code that wouldn't inform the code generation task. We don't need to send this as an output for code generation.
 
-    ## What "Relevant" Means
+    This evaluation is specifically for code generation, where the retrieved chunks serve as input context for the LLM to generate code.
+    Your task is to determine whether these chunks provide sufficient and relevant information for the LLM to successfully fulfill the user's request.
 
-    A chunk is RELEVANT if removing it would cause the code generation to fail or produce incorrect code.
-
-    **Relevant chunks contain:**
-    - Service definitions, resource functions, or HTTP endpoints referenced in the query
-    - Record types, object definitions, or type descriptors needed for the task
-    - Client implementations (HTTP, database, external services) that must be used
-    - Module imports and their usage patterns (ballerina/http, ballerina/sql, etc.)
-    - Specific functions, variables, or constants that need to be called or referenced
-    - Error handling patterns, custom error types required for the implementation
-    - Configuration patterns (configurable variables, TOML usage) needed
-    - Data transformation logic or query expressions relevant to the task
-    - Ballerina-specific idioms (check expressions, isolated functions, transactions)
-
-    **NOT relevant chunks contain:**
-    - Code unrelated to the current task
-    - Generic information that doesn't provide implementation details
-    - Duplicate or redundant information already in other chunks
-
-    ## Critical Understanding
-
-    **Retrieval vs. Codebase Gaps:**
-    - If functionality doesn't exist in the project → NOT a retrieval problem
-    - If functionality exists but wasn't retrieved → IS a retrieval problem
-    - Only evaluate retrieval effectiveness, NOT codebase completeness
-
-    You have access to the full project content. Use it to identify what exists vs. what was retrieved.
-
-    ---
-
-    ## Input Data
+    Note: The retrieval uses top-p sampling (probability threshold), which dynamically selects chunks until the threshold is reached.
 
     <user_query>
     ${userQuery}

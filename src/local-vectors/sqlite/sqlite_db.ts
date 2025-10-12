@@ -89,7 +89,7 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
 export function searchRelevantChunks(
     db: Database,
     queryEmbedding: number[] | Float32Array,
-    topP: number = 0.6
+    topP: number = 0.75
 ): RelevantChunk[] {
     const queryVector = queryEmbedding instanceof Float32Array
         ? queryEmbedding

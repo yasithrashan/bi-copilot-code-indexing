@@ -109,7 +109,7 @@ export async function getCollection(
 export async function searchRelevantChunks(
   pineconeClient: Pinecone,
   queryEmbedding: number[],
-  topP: number = 0.6,
+  topP: number = 0.75,
   indexName: string = INDEX_NAME,
   maxResults: number = 100
 ): Promise<{ score: number; payload: { [key: string]: any; type: string; name: string | null; file: string; line: number; endLine: number; position: { start: { line: number; column: number; }; end: { line: number; column: number; }; }; id: string; hash: string; moduleName?: string; content: string } }[]> {

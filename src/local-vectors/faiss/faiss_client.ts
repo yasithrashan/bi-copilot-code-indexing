@@ -132,7 +132,7 @@ export async function upsertChunks(
 export async function searchRelevantChunks(
     client: FaissClient,
     queryEmbedding: number[],
-    topP: number = 0.6,
+    topP: number = 0.75,
     topK: number = 100
 ): Promise<RelevantChunk[]> {
     const response = await fetch(`${client['baseUrl']}/search`, {

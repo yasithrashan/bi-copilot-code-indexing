@@ -68,10 +68,17 @@ export async function evaluateRelevantChunksQuality(params: QualityEvaluatorPara
 
     // Focused system prompt
     const systemPrompt = `
-    You are evaluating the retrieval quality in a RAG system. Assess how well the retrieved chunks align with and support the user query.
+    You are evaluating the retrieval quality in a RAG system using SQLite vector search with top-p (nucleus sampling).
 
-    This evaluation is specifically for code generation, where the retrieved chunks are provided to the LLM to generate code.
-    Your task is to determine whether these chunks are relevant and sufficient for the LLM to successfully fulfill the user's request.
+    CRITICAL CONTEXT: "Relevance" means the retrieved chunks would help an LLM generate code to fulfill the user's request.
+    These chunks are passed as context to a code generation LLM as an input. A chunk is relevant if it contains:
+        - Missing chunks that are already in the code base and not captured that are related to the user query
+        - A chunk is NOT relevant if it contains unrelated code that wouldn't inform the code generation task. We don't need to send this as an output for code generation.
+
+    This evaluation is specifically for code generation, where the retrieved chunks serve as input context for the LLM to generate code.
+    Your task is to determine whether these chunks provide sufficient and relevant information for the LLM to successfully fulfill the user's request.
+
+    Note: The retrieval uses top-p sampling (probability threshold), which dynamically selects chunks until the threshold is reached.
 
     <user_query>
     ${userQuery}
