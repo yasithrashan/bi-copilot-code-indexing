@@ -56,7 +56,7 @@ async function processQueries(
         console.log(`Processing query ${docId}: ${userQuery.query}`);
 
         // Search for relevant chunks using SQLite vector similarity
-        const relevantChunks = searchRelevantChunks(db, queryEmbedding, 10);
+        const relevantChunks = searchRelevantChunks(db, queryEmbedding);
 
         console.log(`Found ${relevantChunks.length} relevant chunks for query ${docId}`);
 

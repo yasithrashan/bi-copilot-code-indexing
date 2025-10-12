@@ -4,13 +4,11 @@ import type { Chunk, RelevantChunk } from "./types";
 
 /** Initialize SQLite vector DB */
 export function initDB(dbPath = "vector_database.db"): Database {
-    // MacOS custom SQLite path
     Database.setCustomSQLite("/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib");
 
     const db = new Database(dbPath);
     sqliteVec.load(db);
 
-    // Create table for chunks
     db.prepare(`
         CREATE TABLE IF NOT EXISTS chunks (
             id TEXT PRIMARY KEY,
@@ -70,15 +68,13 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        if (!chunk) continue;
         const embedding = embeddings[i];
-        if (!embedding) continue;
-        const vectorBlob = float32ToBlob(embedding);
+        if (!chunk || !embedding) continue;
 
         stmt.run(
             chunk.metadata.id,
             chunk.content,
-            vectorBlob,
+            float32ToBlob(embedding),
             chunk.metadata.file,
             chunk.metadata.line,
             chunk.metadata.endLine,
@@ -89,17 +85,16 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
     }
 }
 
-/** Search for relevant chunks using vector similarity */
+/** Search for relevant chunks using vector similarity + top-P sampling */
 export function searchRelevantChunks(
     db: Database,
     queryEmbedding: number[] | Float32Array,
-    topK: number = 10
+    topP: number = 0.6
 ): RelevantChunk[] {
     const queryVector = queryEmbedding instanceof Float32Array
         ? queryEmbedding
         : new Float32Array(queryEmbedding);
 
-    // Fetch all chunks with their vectors
     const allChunks = db.prepare(`
         SELECT id, content, vector, file, line, endLine, type, name, metadata
         FROM chunks
@@ -115,35 +110,48 @@ export function searchRelevantChunks(
         metadata: string;
     }>;
 
-    // Calculate similarity scores
+    // Calculate cosine similarity scores
     const scoredChunks = allChunks.map(chunk => {
         const chunkVector = blobToFloat32(chunk.vector);
         const score = cosineSimilarity(queryVector, chunkVector);
-
         const metadata = JSON.parse(chunk.metadata);
 
         return {
             score,
             payload: {
                 content: chunk.content,
-                metadata: metadata,
+                metadata,
                 file: chunk.file,
                 textForEmbedding: chunk.content
             }
         };
     });
 
-    // Sort by score (descending) and return top K
-    return scoredChunks
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
+    // Sort by score (descending)
+    scoredChunks.sort((a, b) => b.score - a.score);
+
+    // Normalize scores into probabilities
+    const totalScore = scoredChunks.reduce((sum, c) => sum + Math.max(c.score, 0), 0);
+    const normalized = scoredChunks.map(c => ({
+        ...c,
+        prob: totalScore > 0 ? Math.max(c.score, 0) / totalScore : 0
+    }));
+
+    // Select chunks until cumulative probability > topP
+    const selected: RelevantChunk[] = [];
+    let cumulative = 0;
+    for (const chunk of normalized) {
+        selected.push(chunk);
+        cumulative += chunk.prob;
+        if (cumulative >= topP) break;
+    }
+
+    return selected;
 }
 
 /** Get database statistics */
 export function getDBStats(db: Database): { total_chunks: number; dimension?: number } {
     const result = db.prepare("SELECT COUNT(*) as count FROM chunks").get() as { count: number };
-
-    // Try to get dimension from first vector
     const firstChunk = db.prepare("SELECT vector FROM chunks LIMIT 1").get() as { vector: Uint8Array } | undefined;
     const dimension = firstChunk ? blobToFloat32(firstChunk.vector).length : undefined;
 
