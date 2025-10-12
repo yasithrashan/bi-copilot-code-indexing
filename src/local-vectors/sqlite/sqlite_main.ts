@@ -6,6 +6,7 @@ import { initDB, upsertChunks, searchRelevantChunks, getDBStats } from "./sqlite
 import { GetUserQuery } from "../../shared/queries";
 import fs from 'fs/promises';
 import path from "path";
+import { evaluateRelevantChunksQuality } from "./sqlitr_code_quality";
 
 /** Load and chunk all Ballerina files */
 async function loadAndChunkFiles(ballerinaDir: string, chunker: BallerinaChunker): Promise<Chunk[]> {
@@ -78,13 +79,13 @@ async function processQueries(
         const mdPath = path.join(relevantChunksDir, `${docId}.md`);
         await fs.writeFile(mdPath, mdContent);
 
-        // Uncomment if you want to evaluate code quality
-        // await evaluateRelevantChunksQuality({
-        //     chunksFilePath: jsonPath,
-        //     projectPath: ballerinaDir,
-        //     outputDir: path.join('outputs/sqlite_outputs', 'quality_evaluation'),
-        //     docId
-        // });
+        // Evaluate Code Quality
+        await evaluateRelevantChunksQuality({
+            chunksFilePath: jsonPath,
+            projectPath: ballerinaDir,
+            outputDir: path.join('outputs/sqlite_outputs', 'quality_evaluation'),
+            docId
+        });
     }
 
     console.timeEnd("Processing User Queries");
