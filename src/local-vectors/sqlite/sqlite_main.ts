@@ -20,12 +20,45 @@ async function loadAndChunkFiles(ballerinaDir: string, chunker: BallerinaChunker
         const code = readFiles(file);
         allChunks = allChunks.concat(chunker.chunkBallerinaCode(code, file));
     }
+
+    const idCounts = new Map<string, number>();
+    for (const chunk of allChunks) {
+        let baseId = chunk.metadata.id;
+        let count = idCounts.get(baseId) ?? 0;
+
+        if (count > 0) {
+            // Append counter to make unique
+            chunk.metadata.id = `${baseId}:${count + 1}`;
+        }
+
+        // Update counter for next occurrence
+        idCounts.set(baseId, count + 1);
+    }
+
     chunker.saveChunksToJson(allChunks, ballerinaDir);
     console.timeEnd("Chunking Code");
+
+    // DEBUG: Check for duplicate IDs
+    const finalIdCounts = new Map<string, number>();
+    for (const chunk of allChunks) {
+        const id = chunk.metadata.id;
+        finalIdCounts.set(id, (finalIdCounts.get(id) ?? 0) + 1);
+    }
+    const duplicates = Array.from(finalIdCounts.entries()).filter(([_, count]) => count > 1);
+
+    if (duplicates.length > 0) {
+        console.warn(`\nDUPLICATE IDs STILL DETECTED: ${duplicates.length}`);
+        duplicates.forEach(([id, count]) => {
+            console.warn(`   ID "${id}" appears ${count} times`);
+        });
+    } else {
+        console.log(`✓ All ${allChunks.length} chunks have unique IDs`);
+    }
 
     console.log(`✓ Total chunks created: ${allChunks.length}`);
     return allChunks;
 }
+
 
 /** Process each user query */
 async function processQueries(
@@ -100,8 +133,16 @@ export async function sqlitePipeline(ballerinaDir: string, voyageApiKey: string)
     // Step 1: Load and chunk files
     const allChunks = await loadAndChunkFiles(ballerinaDir, chunker);
 
-    // Step 2: Initialize SQLite vector DB
-    const db = initDB();
+    // Step 2: Initialize SQLite vector DB (delete old db first)
+    const dbPath = "vector_database.db";
+    try {
+        await fs.unlink(dbPath);
+        console.log(`Cleared old database: ${dbPath}`);
+    } catch {
+        // File doesn't exist, that's fine
+    }
+
+    const db = initDB(dbPath);
 
     // Step 3: Generate embeddings
     console.time("Generating Embeddings");
@@ -112,12 +153,17 @@ export async function sqlitePipeline(ballerinaDir: string, voyageApiKey: string)
 
     // Step 4: Upsert into SQLite vector DB
     console.time("Upserting Chunks to SQLite Vector DB");
-    upsertChunks(db, allChunks, embeddings);
+    const insertStats = upsertChunks(db, allChunks, embeddings);
     console.timeEnd("Upserting Chunks to SQLite Vector DB");
 
     // Log stats
     const stats = getDBStats(db);
-    console.log(`Database stats: ${stats.total_chunks} chunks, dimension: ${stats.dimension}`);
+    console.log(`\n✓ Database stats: ${stats.total_chunks} chunks stored, dimension: ${stats.dimension}`);
+
+    if (stats.total_chunks !== allChunks.length) {
+        console.error(`\nMISMATCH: Expected ${allChunks.length} chunks but only ${stats.total_chunks} stored!`);
+        console.error(`   Lost ${allChunks.length - stats.total_chunks} chunks due to duplicate IDs`);
+    }
 
     // Step 5: Process user queries
     const userQueries = await GetUserQuery();

@@ -70,8 +70,9 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32Array[]): void {
     if (!chunks?.length || !embeddings?.length || chunks.length !== embeddings.length) return;
 
+    // Use INSERT (will throw on duplicate) instead of INSERT OR REPLACE
     const stmt = db.prepare(`
-        INSERT OR REPLACE INTO chunks (id, content, vector, file, line, endLine, type, name, metadata)
+        INSERT INTO chunks (id, content, vector, file, line, endLine, type, name, metadata)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -80,19 +81,23 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
         const embedding = embeddings[i];
         if (!chunk || !embedding) continue;
 
-        const normalizedEmbedding = normalizeVector(embedding); // NORMALIZE before storage
+        const normalizedEmbedding = normalizeVector(embedding);
 
-        stmt.run(
-            chunk.metadata.id,
-            chunk.content,
-            float32ToBlob(normalizedEmbedding),
-            chunk.metadata.file,
-            chunk.metadata.line,
-            chunk.metadata.endLine,
-            chunk.metadata.type,
-            chunk.metadata.name ?? null,
-            JSON.stringify(chunk.metadata)
-        );
+        try {
+            stmt.run(
+                chunk.metadata.id,
+                chunk.content,
+                float32ToBlob(normalizedEmbedding),
+                chunk.metadata.file,
+                chunk.metadata.line,
+                chunk.metadata.endLine,
+                chunk.metadata.type,
+                chunk.metadata.name ?? null,
+                JSON.stringify(chunk.metadata)
+            );
+        } catch (error) {
+            console.error(`Failed to insert chunk with ID "${chunk.metadata.id}":`, error);
+        }
     }
 }
 
