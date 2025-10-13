@@ -127,7 +127,8 @@ export async function upsertChunks(
 }
 
 /**
- * Search for relevant chunks (replaces searchRelevantChunks)
+ * Search for relevant chunks
+ * Backend returns ALL results, client applies threshold filtering
  */
 export async function searchRelevantChunks(
     client: FaissClient,
@@ -145,22 +146,34 @@ export async function searchRelevantChunks(
     const data = await response.json() as {
         success?: boolean;
         error?: string;
-        results?: RelevantChunk[];
+        results?: Array<{
+            score: number;
+            payload: {
+                content: string;
+                metadata: any;
+                file: string;
+                textForEmbedding: string;
+            };
+        }>;
     };
 
     if (!data.success) {
         throw new Error(`Failed to search chunks: ${data.error}`);
     }
 
-    // Filter chunks by threshold
-    const filteredChunks = (data.results || []).filter(chunk => (chunk.score ?? 0) >= threshold);
+    // Filter by threshold on CLIENT SIDE
+    const filteredChunks = (data.results || [])
+        .filter(chunk => chunk.score >= threshold)
+        .map(chunk => ({
+            score: chunk.score,
+            payload: chunk.payload
+        }));
 
-    console.log('[Threshold Value] - ', threshold)
+    console.log('[Threshold Value] - ', threshold);
     console.log(`Threshold filtering: [${filteredChunks.length}] chunks selected (threshold: ${threshold})`);
 
     return filteredChunks;
 }
-
 
 /**
  * Get index statistics

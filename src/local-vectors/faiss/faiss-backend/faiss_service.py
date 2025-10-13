@@ -7,11 +7,7 @@ import faiss
 import numpy as np
 import pickle
 from typing import List, Dict, Any
-import voyageai
 
-# ------------------------------
-# Configuration
-# ------------------------------
 app = Flask(__name__)
 CORS(app)
 
@@ -19,20 +15,15 @@ INDEX_FILE = "faiss.index"
 META_FILE = "metadata.pkl"
 
 load_dotenv()
-api_key = os.getenv("VOYAGE_API_KEY")
-if not api_key:
-    raise ValueError("VOYAGE_API_KEY not set in .env")
 
-vo = voyageai.Client(api_key=api_key)
-MODEL_NAME = "voyage-code-3"
-
-# ------------------------------
+# ============================================
 # Helper Functions
-# ------------------------------
-def embed_texts(texts: List[str]) -> np.ndarray:
-    """Generate embeddings using Voyage API"""
-    response = vo.embed(texts, model=MODEL_NAME)
-    return np.array(response.embeddings, dtype="float32")
+# ============================================
+def normalize_vector(vector: np.ndarray) -> np.ndarray:
+    """Normalize vector to unit length for cosine similarity"""
+    norm = np.linalg.norm(vector, axis=1, keepdims=True)
+    norm[norm == 0] = 1  # Avoid division by zero
+    return vector / norm
 
 def load_or_create_index(dimension: int):
     """Load existing FAISS index or create new one"""
@@ -44,12 +35,9 @@ def load_or_create_index(dimension: int):
                     metadata = pickle.load(f)
                 print(f"Loaded existing index with {index.ntotal} vectors")
                 return index, metadata
-            else:
-                print(f"Dimension mismatch. Creating new index...")
         except Exception as e:
             print(f"Error loading index: {e}. Creating new index...")
 
-    # Create new index
     index = faiss.IndexFlatL2(dimension)
     metadata = []
     print("Created new FAISS index")
@@ -61,9 +49,9 @@ def save_index(index, metadata):
     with open(META_FILE, "wb") as f:
         pickle.dump(metadata, f)
 
-# ------------------------------
+# ============================================
 # API Endpoints
-# ------------------------------
+# ============================================
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -79,11 +67,9 @@ def create_collection():
         data = request.json
         dimension = data.get('dimension', 1024)
 
-        # Create new index
         index = faiss.IndexFlatL2(dimension)
         metadata = []
 
-        # Save to disk
         save_index(index, metadata)
 
         return jsonify({
@@ -96,11 +82,11 @@ def create_collection():
 @app.route('/upsert', methods=['POST'])
 def upsert_chunks():
     """
-    Upsert chunks with embeddings
+    Upsert chunks with normalized embeddings
     Body: {
-        "chunks": [...],  # Array of chunk objects with metadata
-        "embeddings": [[...], ...],  # Array of embedding vectors
-        "texts": [...]  # Original texts for embedding
+        "chunks": [...],
+        "embeddings": [[...], ...],
+        "texts": [...]
     }
     """
     try:
@@ -118,14 +104,14 @@ def upsert_chunks():
                 "error": "Chunks and embeddings length mismatch"
             }), 400
 
-        # Convert embeddings to numpy array
+        # Convert to numpy and normalize
         embeddings_array = np.array(embeddings, dtype="float32")
+        embeddings_array = normalize_vector(embeddings_array)
         dimension = embeddings_array.shape[1]
 
         # Load or create index
         index, metadata = load_or_create_index(dimension)
 
-        # Check dimension compatibility
         if index.d != dimension:
             return jsonify({
                 "success": False,
@@ -136,7 +122,7 @@ def upsert_chunks():
         start_id = index.ntotal
         index.add(embeddings_array)
 
-        # Store metadata with internal IDs
+        # Store metadata
         for i, (chunk, text) in enumerate(zip(chunks, texts)):
             metadata.append({
                 "id": start_id + i,
@@ -145,7 +131,6 @@ def upsert_chunks():
                 "textForEmbedding": text
             })
 
-        # Save to disk
         save_index(index, metadata)
 
         return jsonify({
@@ -158,69 +143,48 @@ def upsert_chunks():
 @app.route('/search', methods=['POST'])
 def search_chunks():
     """
-    Search for similar chunks using top-p filtering
+    Search for similar chunks - returns ALL results sorted by score
+    Threshold filtering is done on CLIENT SIDE
     Body: {
-        "query_embedding": [...],  # Query embedding vector
-        "top_p": 0.6   # Cumulative probability threshold (default 0.6)
+        "query_embedding": [...]
     }
     """
     try:
         data = request.json
         query_embedding = data.get('query_embedding', [])
-        top_p = data.get('top_p', 0.6)  # Default to 60%
 
         if not query_embedding:
             return jsonify({"success": False, "error": "Missing query_embedding"}), 400
 
         if not os.path.exists(INDEX_FILE):
-            return jsonify({"success": False, "error": "No index found. Please index data first."}), 404
+            return jsonify({"success": False, "error": "No index found"}), 404
 
         # Load index and metadata
         index = faiss.read_index(INDEX_FILE)
         with open(META_FILE, "rb") as f:
             metadata = pickle.load(f)
 
-        # Convert query to numpy array
+        # Normalize query
         query_array = np.array([query_embedding], dtype="float32")
+        query_array = normalize_vector(query_array)
 
-        # Search all vectors (we'll filter with top-p)
-        distances, indices = index.search(query_array, index.ntotal)
+        # Get all vectors and normalize
+        all_vectors = index.reconstruct_n(0, index.ntotal)
+        all_vectors = normalize_vector(all_vectors)
 
-        # Convert L2 distances to similarity scores
-        # Lower distance = higher similarity
-        scores = [1.0 / (1.0 + float(dist)) for dist in distances[0]]
+        # Calculate cosine similarity
+        scores = np.dot(all_vectors, query_array.T).flatten()
 
-        # Normalize scores to probabilities
-        total_score = sum(scores)
-        if total_score == 0:
-            return jsonify({
-                "success": True,
-                "results": [],
-                "selected_count": 0,
-                "cumulative_probability": 0.0
-            })
-
-        probabilities = [score / total_score for score in scores]
-
-        # Apply top-p filtering
-        cumulative_prob = 0.0
-        selected_indices = []
-
-        for i, prob in enumerate(probabilities):
-            cumulative_prob += prob
-            selected_indices.append(i)
-            if cumulative_prob >= top_p:
-                break
+        # Sort by score (highest first) - NO THRESHOLD FILTERING
+        sorted_indices = np.argsort(-scores)
 
         # Format results
         results = []
-        for i in selected_indices:
-            idx = indices[0][i]
-            if idx < len(metadata) and idx >= 0:
+        for idx in sorted_indices:
+            if idx < len(metadata):
                 meta = metadata[idx]
                 results.append({
-                    "score": scores[i],
-                    "probability": probabilities[i],
+                    "score": float(scores[idx]),
                     "payload": {
                         "content": meta.get('content', ''),
                         "metadata": meta.get('metadata', {}),
@@ -232,8 +196,7 @@ def search_chunks():
         return jsonify({
             "success": True,
             "results": results,
-            "selected_count": len(results),
-            "cumulative_probability": cumulative_prob
+            "total_results": len(results)
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -278,9 +241,9 @@ def clear_index():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ------------------------------
+# ============================================
 # Main
-# ------------------------------
+# ============================================
 if __name__ == "__main__":
     port = int(os.getenv("FAISS_SERVICE_PORT", 5001))
     print(f"Starting FAISS service on port {port}...")

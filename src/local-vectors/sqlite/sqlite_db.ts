@@ -36,6 +36,15 @@ function blobToFloat32(blob: Uint8Array): Float32Array {
     return new Float32Array(blob.buffer);
 }
 
+/** Normalize vector to unit length */
+function normalizeVector(v: Float32Array): Float32Array {
+    const norm = Math.sqrt(
+        Array.from(v).reduce((sum, val) => sum + val * val, 0)
+    );
+    if (norm === 0) return v;
+    return new Float32Array(Array.from(v).map(val => val / norm));
+}
+
 /** Calculate cosine similarity between two vectors */
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
     if (a.length !== b.length) return 0;
@@ -57,7 +66,7 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-/** Upsert chunks into SQLite */
+/** Upsert chunks into SQLite with normalized embeddings */
 export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32Array[]): void {
     if (!chunks?.length || !embeddings?.length || chunks.length !== embeddings.length) return;
 
@@ -71,10 +80,12 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
         const embedding = embeddings[i];
         if (!chunk || !embedding) continue;
 
+        const normalizedEmbedding = normalizeVector(embedding); // NORMALIZE before storage
+
         stmt.run(
             chunk.metadata.id,
             chunk.content,
-            float32ToBlob(embedding),
+            float32ToBlob(normalizedEmbedding),
             chunk.metadata.file,
             chunk.metadata.line,
             chunk.metadata.endLine,
@@ -91,9 +102,11 @@ export function searchRelevantChunks(
     queryEmbedding: number[] | Float32Array,
     threshold: number = parseFloat(process.env.THRESHOLD as string)
 ): RelevantChunk[] {
-    const queryVector = queryEmbedding instanceof Float32Array
+    let queryVector = queryEmbedding instanceof Float32Array
         ? queryEmbedding
         : new Float32Array(queryEmbedding);
+
+    queryVector = normalizeVector(queryVector); // NORMALIZE query
 
     const allChunks = db.prepare(`
         SELECT id, content, vector, file, line, endLine, type, name, metadata
@@ -126,16 +139,16 @@ export function searchRelevantChunks(
             }
         };
     });
-    console.log('[Threshold Value] - ', threshold)
+
+    console.log('[Threshold Value] - ', threshold);
+
     // Filter chunks by threshold
     const filtered = scoredChunks
         .filter(c => c.score >= threshold)
         .sort((a, b) => b.score - a.score);
 
-
     return filtered;
 }
-
 
 /** Get database statistics */
 export function getDBStats(db: Database): { total_chunks: number; dimension?: number } {
