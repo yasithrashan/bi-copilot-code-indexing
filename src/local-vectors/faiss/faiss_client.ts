@@ -132,16 +132,13 @@ export async function upsertChunks(
 export async function searchRelevantChunks(
     client: FaissClient,
     queryEmbedding: number[],
-    topP: number = 0.75,
-    topK: number = 100
+    threshold: number = parseFloat(process.env.THRESHOLD as string)
 ): Promise<RelevantChunk[]> {
     const response = await fetch(`${client['baseUrl']}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            query_embedding: queryEmbedding,
-            top_k: topK,
-            top_p: topP
+            query_embedding: queryEmbedding
         })
     });
 
@@ -149,22 +146,21 @@ export async function searchRelevantChunks(
         success?: boolean;
         error?: string;
         results?: RelevantChunk[];
-        total_candidates?: number;
-        selected_count?: number;
-        cumulative_probability?: number;
     };
 
     if (!data.success) {
         throw new Error(`Failed to search chunks: ${data.error}`);
     }
 
-    // Log top-p filtering stats
-    if (data.total_candidates && data.selected_count) {
-        console.log(`Top-P filtering: ${data.selected_count}/${data.total_candidates} chunks selected (cumulative prob: ${data.cumulative_probability?.toFixed(4)})`);
-    }
+    // Filter chunks by threshold
+    const filteredChunks = (data.results || []).filter(chunk => (chunk.score ?? 0) >= threshold);
 
-    return data.results as RelevantChunk[];
+    console.log('[Threshold Value] - ', threshold)
+    console.log(`Threshold filtering: [${filteredChunks.length}] chunks selected (threshold: ${threshold})`);
+
+    return filteredChunks;
 }
+
 
 /**
  * Get index statistics

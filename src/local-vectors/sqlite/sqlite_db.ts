@@ -85,11 +85,11 @@ export function upsertChunks(db: Database, chunks: Chunk[], embeddings: Float32A
     }
 }
 
-/** Search for relevant chunks using vector similarity + top-P sampling */
+/** Search for relevant chunks using vector similarity + threshold filtering */
 export function searchRelevantChunks(
     db: Database,
     queryEmbedding: number[] | Float32Array,
-    topP: number = 0.75
+    threshold: number = parseFloat(process.env.THRESHOLD as string)
 ): RelevantChunk[] {
     const queryVector = queryEmbedding instanceof Float32Array
         ? queryEmbedding
@@ -126,28 +126,16 @@ export function searchRelevantChunks(
             }
         };
     });
+    console.log('[Threshold Value] - ', threshold)
+    // Filter chunks by threshold
+    const filtered = scoredChunks
+        .filter(c => c.score >= threshold)
+        .sort((a, b) => b.score - a.score);
 
-    // Sort by score (descending)
-    scoredChunks.sort((a, b) => b.score - a.score);
 
-    // Normalize scores into probabilities
-    const totalScore = scoredChunks.reduce((sum, c) => sum + Math.max(c.score, 0), 0);
-    const normalized = scoredChunks.map(c => ({
-        ...c,
-        prob: totalScore > 0 ? Math.max(c.score, 0) / totalScore : 0
-    }));
-
-    // Select chunks until cumulative probability > topP
-    const selected: RelevantChunk[] = [];
-    let cumulative = 0;
-    for (const chunk of normalized) {
-        selected.push(chunk);
-        cumulative += chunk.prob;
-        if (cumulative >= topP) break;
-    }
-
-    return selected;
+    return filtered;
 }
+
 
 /** Get database statistics */
 export function getDBStats(db: Database): { total_chunks: number; dimension?: number } {

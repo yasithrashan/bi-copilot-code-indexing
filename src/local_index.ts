@@ -11,5 +11,5 @@ if (!voyageApiKey) throw new Error("VOYAGE_API_KEY environment variable is not s
 console.log('Running Faiss..')
 await faissPipeline(balFilePath, voyageApiKey);
 
-// console.log('Running SQLite')
-// await sqlitePipeline(balFilePath,voyageApiKey);
+console.log('Running SQLite')
+await sqlitePipeline(balFilePath,voyageApiKey);

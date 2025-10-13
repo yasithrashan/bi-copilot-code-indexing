@@ -105,24 +105,42 @@ export async function getCollection(
   }
 }
 
-// Function to search Pinecone with top-p (nucleus sampling)
+// Function to search Pinecone with threshold
 export async function searchRelevantChunks(
   pineconeClient: Pinecone,
   queryEmbedding: number[],
-  topP: number = 0.75,
+  threshold: number = parseFloat(process.env.THRESHOLD as string),
   indexName: string = INDEX_NAME,
   maxResults: number = 100
-): Promise<{ score: number; payload: { [key: string]: any; type: string; name: string | null; file: string; line: number; endLine: number; position: { start: { line: number; column: number; }; end: { line: number; column: number; }; }; id: string; hash: string; moduleName?: string; content: string } }[]> {
+): Promise<{
+  score: number;
+  payload: {
+    [key: string]: any;
+    type: string;
+    name: string | null;
+    file: string;
+    line: number;
+    endLine: number;
+    position: {
+      start: { line: number; column: number };
+      end: { line: number; column: number };
+    };
+    id: string;
+    hash: string;
+    moduleName?: string;
+    content: string;
+  };
+}[]> {
   const index = pineconeClient.index(indexName);
 
-  // First, get more results than we might need
+  // Retrieve results from Pinecone
   const searchResult = await index.query({
     vector: queryEmbedding,
     topK: maxResults,
     includeMetadata: true,
   });
 
-  // Map and sort results by score (descending)
+  // Map results
   const allResults = (searchResult.matches?.map((match) => {
     if (!match.metadata) return null;
 
@@ -141,37 +159,19 @@ export async function searchRelevantChunks(
         moduleName: (match.metadata.moduleName as string | undefined),
       },
     };
-  }).filter((result): result is NonNullable<typeof result> => result !== null) || []).sort((a, b) => b.score - a.score);
+  }).filter((r): r is NonNullable<typeof r> => r !== null) || []).sort((a, b) => b.score - a.score);
 
   if (allResults.length === 0) {
     return [];
   }
 
-  // Normalize scores to probabilities (softmax)
-  const maxScore = allResults[0]!.score;
-  const expScores = allResults.map(r => Math.exp(r.score - maxScore));
-  const sumExpScores = expScores.reduce((sum, val) => sum + val, 0);
-  const probabilities = expScores.map(exp => exp / sumExpScores);
+  // Filter by score threshold
+  const filteredResults = allResults.filter(r => r.score >= threshold);
 
-  // Apply top-p filtering
-  let cumulativeProb = 0;
-  const selectedResults = [];
+  console.log('[Threshold Value] - ', threshold)
+  console.log(`Selected ${filteredResults.length} chunks from ${allResults.length} total results`);
 
-  for (let i = 0; i < allResults.length; i++) {
-    const prob = probabilities[i];
-    if (prob !== undefined) {
-      cumulativeProb += prob;
-      selectedResults.push(allResults[i]!);
-
-      if (cumulativeProb >= topP) {
-        break;
-      }
-    }
-  }
-
-  console.log(`Top-p (${topP}) selected ${selectedResults.length} chunks from ${allResults.length} total results`);
-
-  return selectedResults;
+  return filteredResults;
 }
 
 // Optional: Delete index (for cleanup)
