@@ -59,7 +59,10 @@ async function processQueries(
     console.time("Processing User Queries");
 
     const relevantChunksDir = 'outputs/rag_outputs/relevant_chunks';
+    const timeConsumingDir = 'outputs/rag_outputs/time_consuming';
+
     await fs.mkdir(relevantChunksDir, { recursive: true });
+    await fs.mkdir(timeConsumingDir, { recursive: true });
 
     for (let i = 0; i < userQueries.length; i++) {
         const docId = i + 1;
@@ -76,12 +79,28 @@ async function processQueries(
             continue;
         }
 
-        // Search for relevant chunks
-        const relevantChunks = await searchRelevantChunks(pineconeClient, queryEmbedding);
+        console.log(`Processing query ${docId}: ${userQuery.query}`);
 
-        // Save JSON
+        // Start timing for this query
+        const queryStartTime = performance.now();
+
+        // Time the retrieval of relevant chunks
+        const retrievalStartTime = performance.now();
+        const relevantChunks = await searchRelevantChunks(pineconeClient, queryEmbedding);
+        const retrievalEndTime = performance.now();
+        const retrievalTime = retrievalEndTime - retrievalStartTime;
+
+        const queryEndTime = performance.now();
+        const totalQueryTime = queryEndTime - queryStartTime;
+
+        console.log(`Found ${relevantChunks.length} relevant chunks for query ${docId}`);
+        console.log(`Retrieval time: ${retrievalTime.toFixed(2)}ms, Total query time: ${totalQueryTime.toFixed(2)}ms`);
+
+        // Save JSON with timing information
         const jsonData = {
             query: userQuery.query,
+            retrieval_time_ms: parseFloat(retrievalTime.toFixed(2)),
+            total_query_time_ms: parseFloat(totalQueryTime.toFixed(2)),
             relevant_chunks: relevantChunks.map(chunk => ({
                 score: chunk.score,
                 payload: chunk.payload
@@ -90,12 +109,53 @@ async function processQueries(
         const jsonPath = path.join(relevantChunksDir, `${docId}.json`);
         await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
 
-        // Save Markdown
-        const mdContent = relevantChunks.reduce((md, chunk, idx) => {
-            return md + `### Chunk ${idx + 1}\n\`\`\`ballerina\n${chunk.payload.content.trim()}\n\`\`\`\n\n`;
-        }, `# User Query ${docId}\n\n**Query:** ${userQuery.query}\n\n## Relevant Chunks\n\n`);
+        // Save Markdown with timing information
+        const mdContent = `# User Query ${docId}
+
+**Query:** ${userQuery.query}
+
+**Timing:**
+- Retrieval Time: ${retrievalTime.toFixed(2)}ms
+- Total Query Time: ${totalQueryTime.toFixed(2)}ms
+
+## Relevant Chunks
+
+${relevantChunks.map((chunk, idx) =>
+    `### Chunk ${idx + 1} (Score: ${chunk.score.toFixed(4)})\n\`\`\`ballerina\n${chunk.payload.content.trim()}\n\`\`\`\n`
+).join('\n')}`;
         const mdPath = path.join(relevantChunksDir, `${docId}.md`);
         await fs.writeFile(mdPath, mdContent);
+
+        // Save timing information to time_consuming directory
+        const timingJsonData = {
+            doc_id: docId,
+            query: userQuery.query,
+            retrieval_time_ms: parseFloat(retrievalTime.toFixed(2)),
+            total_query_time_ms: parseFloat(totalQueryTime.toFixed(2)),
+            num_chunks_retrieved: relevantChunks.length
+        };
+        const timingJsonPath = path.join(timeConsumingDir, `${docId}.json`);
+        await fs.writeFile(timingJsonPath, JSON.stringify(timingJsonData, null, 2));
+
+        const timingMdContent = `# Query ${docId} - Timing Report
+
+**Query:** ${userQuery.query}
+
+## Performance Metrics
+
+| Metric | Time |
+|--------|------|
+| Retrieval Time | ${retrievalTime.toFixed(2)}ms |
+| Total Query Time | ${totalQueryTime.toFixed(2)}ms |
+| Chunks Retrieved | ${relevantChunks.length} |
+
+## Details
+
+- **Retrieval Time**: Time taken to search and retrieve relevant chunks from the Pinecone index
+- **Total Query Time**: Total time for processing the entire query including retrieval
+`;
+        const timingMdPath = path.join(timeConsumingDir, `${docId}.md`);
+        await fs.writeFile(timingMdPath, timingMdContent);
 
         // Expand code
         // const expandOutputDir = path.join('outputs/rag_outputs', 'expand_code');
