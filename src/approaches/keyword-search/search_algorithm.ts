@@ -48,8 +48,14 @@ function idf(term: string, docFreq: Map<string, number>, totalDocs: number): num
   return Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
 }
 
-// BM25 search function
-export async function bm25Search(jsonPath: string, query: string, topK = 5, k1 = 1.5, b = 0.75): Promise<BM25Result[]> {
+// BM25 search function - returns all relevant results above threshold
+export async function bm25Search(
+  jsonPath: string,
+  query: string,
+  minScore = 0.4,
+  k1 = 1.5,
+  b = 0.75
+): Promise<BM25Result[]> {
   const raw = fs.readFileSync(jsonPath, "utf-8");
   const data = JSON.parse(raw);
   const chunks: Chunk[] = data.chunks;
@@ -90,7 +96,6 @@ export async function bm25Search(jsonPath: string, query: string, topK = 5, k1 =
         score
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+    .filter(result => result.score >= minScore)
+    .sort((a, b) => b.score - a.score);
 }
-

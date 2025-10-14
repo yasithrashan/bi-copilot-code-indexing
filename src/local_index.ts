@@ -8,8 +8,8 @@ if (!balFilePath) throw new Error("BAL_PROJECT_DIRECTORY environment variable is
 
 if (!voyageApiKey) throw new Error("VOYAGE_API_KEY environment variable is not set.");
 
-console.log('Running Faiss..')
+console.log('Running Faiss..');
 await faissPipeline(balFilePath, voyageApiKey);
 
-console.log('Running SQLite')
-await sqlitePipeline(balFilePath,voyageApiKey);
+// console.log('Running SQLite')
+// await sqlitePipeline(balFilePath,voyageApiKey);
