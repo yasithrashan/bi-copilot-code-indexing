@@ -97,47 +97,57 @@ ${chunksContent}
     }
     console.log();
 
-    const systemPrompt = `You are a RAG system evaluator. Analyze the provided evaluation data for multiple RAG approaches.
+    const systemPrompt = `You are an expert RAG (Retrieval-Augmented Generation) system evaluator with deep knowledge of information retrieval metrics and performance analysis.
 
-Extract and compare:
-1. Precision, Recall, F1-Score from quality evaluations
-2. Retrieval time and total query time from timing data
-3. Number of relevant chunks retrieved
-4. Overall performance ranking
+    Your task is to:
+    1. Extract precise numerical metrics from quality evaluations (Precision, Recall, F1-Score, Overall Score)
+    2. Parse timing data accurately (retrieval time, total query time in milliseconds/seconds)
+    3. Count relevant chunks retrieved by each system
+    4. Calculate derived metrics (quality-to-speed ratio, efficiency scores)
+    5. Provide objective rankings based on different criteria
+    6. Identify meaningful patterns, trade-offs, and performance characteristics
 
-Generate a structured metrics matrix in markdown format with clear tables showing all metrics, rankings, and winners.`;
+    Important guidelines:
+    - Extract EXACT numbers from the provided evaluations - do not estimate or approximate
+    - If a metric is missing or unclear, explicitly note it as "N/A" rather than guessing
+    - Maintain consistent units across all systems (convert if necessary)
+    - Consider both speed and quality when determining "Most Efficient" system
+    - Provide actionable insights that help understand which system excels in which scenarios
+    - Be objective and data-driven in your analysis
+
+    Output format: Structured markdown with clear tables, rankings, and concise insights.`;
 
     const userPrompt = `Analyze these RAG system evaluations for Query ID ${queryId} and generate a comprehensive metrics comparison matrix:
 
 ${allEvaluations}
 
-Provide your analysis in the following format:
+    Provide your analysis in the following format:
 
-# Multi-System RAG Comparison - Query ${queryId}
+    # Multi-System RAG Comparison - Query ${queryId}
 
-## Quality Metrics Table
-| System | Overall Score | Precision | Recall | F1-Score |
-|--------|---------------|-----------|--------|----------|
-[Fill with data from above]
+    ## Quality Metrics Table
+    | System | Overall Score | Precision | Recall | F1-Score |
+    |--------|---------------|-----------|--------|----------|
+    [Fill with data from above]
 
-## Performance Metrics Table
-| System | Retrieval Time | Total Time | Chunks Retrieved |
-|--------|----------------|-----------|------------------|
-[Fill with data from above]
+    ## Performance Metrics Table
+    | System | Retrieval Time | Total Time | Chunks Retrieved |
+    |--------|----------------|-----------|------------------|
+    [Fill with data from above]
 
-## Rankings
-- Quality Winner: [System with highest score]
-- Speed Winner: [System with fastest retrieval]
-- Precision Leader: [System with highest precision]
-- Recall Leader: [System with highest recall]
-- Most Efficient: [Best quality-to-speed ratio]
+    ## Rankings
+    - Quality Winner: [System with highest score]
+    - Speed Winner: [System with fastest retrieval]
+    - Precision Leader: [System with highest precision]
+    - Recall Leader: [System with highest recall]
+    - Most Efficient: [Best quality-to-speed ratio]
 
-## Key Insights
-- [Notable findings from the comparison]
-- [Performance differences]
-- [Trade-offs between approaches]
+    ## Key Insights
+    - [Notable findings from the comparison]
+    - [Performance differences]
+    - [Trade-offs between approaches]
 
-Extract exact numbers from the evaluations above to populate the tables.`;
+    Extract exact numbers from the evaluations above to populate the tables.`;
 
     const { text } = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
